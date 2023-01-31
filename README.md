@@ -18,7 +18,7 @@ to the command.
 ## Run Evaluation Commands
 Main runs (Table 1) and additional results (Appendix A3)
 
-You need to insert for `<absolute_project_root_dir>` to the absolute root path of this repository on your machine (e.g. `/home/yourhome/htopcpt/`)
+You need to insert for `<absolute_project_root_dir>` to the absolute root path of this repository on your machine (e.g. `/home/yourhome/hopcpt/`)
 
 ### Solar 3Y
 
@@ -31,7 +31,7 @@ python code/run_sweep_eval.py 'config/model_fc=darts_forest' 'config/model_uc=ep
 ```sh
 python ./code/main.py 'config/model_fc=darts_forest' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=enbpi_forest_3yearSolar' 'config.model_uc.past_window_len=125' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_forest' 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=spic_forest_3yearSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -54,7 +54,7 @@ python code/run_sweep_eval.py 'config/model_fc=darts_lightgbm' 'config/model_uc=
 ```sh
 python ./code/main.py 'config/model_fc=darts_lightgbm' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=enbpi_lgbm_3yearSolar' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_lightgbm' 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=spic_lgbm_3yearSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -81,7 +81,7 @@ python code/run_sweep_eval.py 'config/model_fc=reg_ridge' 'config/model_uc=eps_p
 ```sh
 python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=enbpi_ridge_3yearSolar' 'config.model_uc.past_window_len=25' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=reg_ridge' 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=spic_regridge_3yearSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -105,7 +105,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_forest' 'config/model_uc=
 ```sh
 python ./code/main.py 'config/model_fc=darts_forest' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=enbpi_forest_air10full' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_forest' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=spic_forest_air10full' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -127,7 +127,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_lightgbm' 'config/model_u
 ```sh
 python ./code/main.py 'config/model_fc=darts_lightgbm' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=enbpi_lgbm_air10full' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_lightgbm' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=spic_lgbm_air10full' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -154,7 +154,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=reg_ridge' 'config/model_uc=eps
 ```sh
 python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=enbpi_ridge_air10full' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=reg_ridge' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=spic_regridge_air10full' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -178,7 +178,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_forest' 'config/model_uc=
 ```sh
 python code/main.py 'config/model_fc=darts_forest' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=forest_enbpi_sapflux3' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python code/run_sweep_spic.py 'config/model_fc=darts_forest' 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=forest_spic_sapflux3' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -201,7 +201,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_lightgbm' 'config/model_u
 python code/main.py 'config/model_fc=darts_lightgbm' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=lgbm_enbpi_sapflux3' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 
 ```
-##### SPIC
+##### SPCI
 ```sh
 python code/run_sweep_spic.py 'config/model_fc=darts_lightgbm' 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=lgbm_spic_sapflux3' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -228,7 +228,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=reg_ridge' 'config/model_uc=eps
 ```sh
 python code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=ridge_enbpi_sapflux3' 'config.model_uc.past_window_len=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python code/run_sweep_spic.py 'config/model_fc=reg_ridge' 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=regRidge_spic_sapflux3' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -259,7 +259,7 @@ python code/run_sweep_eval.py 'config/model_fc=precomputed_nh' 'config/model_uc=
 ```sh
 python ./code/main.py 'config/model_fc=precomputed_nh' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=hydro' 'config.experiment_data.experiment_name=enbpi_forest_streamflow' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=precomputed_nh' 'config/task=default_3year_gn' 'config/dataset=hydro' 'config.experiment_data.experiment_name=spic_forest_streamflow' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -284,7 +284,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_forest' 'config/model_uc=
 ```sh
 python ./code/main.py 'config/model_fc=darts_forest' 'config/model_uc=enbpi' 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=enbpi_forest_1yearSolar' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_forest' 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=spic_forest_1yearSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -306,7 +306,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_lightgbm' 'config/model_u
 ```sh
 python ./code/main.py 'config/model_fc=darts_lightgbm' 'config/model_uc=enbpi' 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=enbpi_lgbm_1yearSolar' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_lightgbm' 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=spic_lgbm_1yearSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -333,7 +333,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=reg_ridge' 'config/model_uc=eps
 ```sh
 python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=enbpi' 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=enbpi_ridge_1yearSolar' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 on ./code/run_sweep_spic.py 'config/model_fc=reg_ridge' 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=spic_regridge_1yearSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -357,7 +357,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_forest' 'config/model_uc=
 ```sh
 python ./code/main.py 'config/model_fc=darts_forest' 'config/model_uc=enbpi' 'config/task=default_gn' 'config/dataset=enbPI_solar_all' 'config.experiment_data.experiment_name=enbpi_forest_smallSolar' 'config.model_uc.past_window_len=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_forest' 'config/task=default_gn' 'config/dataset=enbPI_solar_all' 'config.experiment_data.experiment_name=spic_forest_smallSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -379,7 +379,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_lightgbm' 'config/model_u
 ```sh
 python ./code/main.py 'config/model_fc=darts_lightgbm' 'config/model_uc=enbpi' 'config/task=default_gn' 'config/dataset=enbPI_solar_all' 'config.experiment_data.experiment_name=enbpi_lgbm_smallSolar' 'config.model_uc.past_window_len=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_lightgbm' 'config/task=default_gn' 'config/dataset=enbPI_solar_all' 'config.experiment_data.experiment_name=spic_lgbm_smallSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -407,7 +407,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=reg_ridge' 'config/model_uc=eps
 python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=enbpi' 'config/task=default_gn' 'config/dataset=enbPI_solar_all' 'config.experiment_data.experiment_name=enbpi_ridge_smallSolar' 'config.model_uc.past_window_len=100' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=reg_ridge' 'config/task=default_gn' 'config/dataset=enbPI_solar_all' 'config.experiment_data.experiment_name=spic_ridge_smallSolar' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -431,7 +431,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_forest' 'config/model_uc=
 ```sh
 python ./code/main.py 'config/model_fc=darts_forest' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=enbpi_forest_air25full' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_forest' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=spic_forest_air25full' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -453,7 +453,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=darts_lightgbm' 'config/model_u
 ```sh
 python ./code/main.py 'config/model_fc=darts_lightgbm' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=enbpi_lgbm_air25full' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=darts_lightgbm' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=spic_lgbm_air25full' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -480,7 +480,7 @@ python ./code/run_sweep_eval.py 'config/model_fc=reg_ridge' 'config/model_uc=eps
 ```sh
 python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=enbpi' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=enbpi_ridge_air25full' 'config.model_uc.past_window_len=200' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
-##### SPIC
+##### SPCI
 ```sh
 python ./code/run_sweep_spic.py 'config/model_fc=reg_ridge' 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=spic_regRidge_air25full' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'
 ```
@@ -496,7 +496,7 @@ python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=conf_default'
 ## Run KNN Commands
 KNN runs from Appendix C
 
-You need to insert for `<absolute_project_root_dir>` to the absolute root path of this repository on your machine (e.g. `/home/yourhome/htopcpt/`)
+You need to insert for `<absolute_project_root_dir>` to the absolute root path of this repository on your machine (e.g. `/home/yourhome/hopcpt/`)
 
 ```
 # Solar Small - Forest/LGBM/Ridge
@@ -531,7 +531,7 @@ python code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=eps_sel_stat_kn
 ```
 
 
-### Runs SPIC Ablations
+### Runs SPCI Ablations
 For running with a Window Size 25 set additional command (Appendix A1)
 ```
 'config.model_uc.past_window_len=25'
@@ -541,3 +541,4 @@ For running with retrain set additional command (Appendix A2), set model_uc spec
 ```
 'config/model_uc=spic_retrain'
 ```
+
