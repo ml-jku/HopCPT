@@ -1,0 +1,54 @@
+
+
+sapflow - ffill nan 2
+CUTTED - NOT FILTERED
+SELECTED_COLUMNS
+"ta", "rh", "sw_in",'ppfd_in', "ws", "precip", "swc_shallow", "swc_deep", "ext_rad", "vpd"
+
+EXCLUDE_SET = [
+    "USA_HIL_HF1_POS",
+    "USA_HIL_HF2",
+    "ESP_ALT_ARM",
+    'AUS_MAR_HSW_HIG',
+    'USA_TNP',
+    'ZAF_FRA_FRA',
+    'USA_INM',
+    'COL_MAC_SAF_RAD',
+    'ZAF_RAD',
+    'USA_TNO',
+    'RUS_FYO',
+    'ZAF_SOU_SOU',
+    'USA_TNY',
+    'USA_SMI_SCB',
+    'IDN_JAM_OIL',
+    'ESP_LAS',
+    'USA_TNB',
+    'USA_WVF',
+    'IDN_JAM_RUB',
+    'ESP_YUN_T3_THI',
+    'USA_SMI_SER',
+    'USA_PAR_FER'
+]
+
+
+## Sizes
+((5000 <= a) & (a <= 7000)).sum()
+Out[86]: 77
+((6000 <= a) & (a <= 7000)).sum()
+Out[87]: 34
+((6000 <= a) & (a <= 8000)).sum()
+Out[88]: 77
+((6000 <= a) & (a <= 9000)).sum()
+Out[89]: 91
+((7000 <= a) & (a <= 9000)).sum()
+Out[90]: 57
+((15000 <= a) & (a <= 20000)).sum()
+Out[91]: 40
+((15000 <= a) & (a <= 25000)).sum()
+Out[92]: 52
+((20000 <= a) & (a <= 50000)).sum()
+Out[93]: 12
+((10000 <= a) & (a <= 15000)).sum()
+Out[94]: 46
+((0 <= a) & (a <= 5000)).sum()
+Out[95]: 2

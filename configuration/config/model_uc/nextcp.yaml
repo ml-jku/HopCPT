@@ -1,0 +1,4 @@
+_target_: models.uncertainty.sota.cpnex.NexCP
+mode: 'nexCP-LS'
+rho: 0.99
+max_past: 500

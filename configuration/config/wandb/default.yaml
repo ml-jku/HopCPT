@@ -1,0 +1,8 @@
+tags: # list(), used to tag wandblogger
+  - ${config.experiment_data.experiment_tag}_exps
+  - ${config.experiment_data.experiment_sweep_tag}
+notes:  ${config.experiment_data.experiment_notes}
+group: null
+watch:
+  log: all # all, parameters, gradients, None (= null)
+  log_freq: 100

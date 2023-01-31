@@ -1,0 +1,13 @@
+/venv
+/.idea
+/outputs
+/data/hydrology/CAMELS_US/*
+!/data/hydrology/CAMELS_US/_insert_camels_here
+/.vscode
+/wandb
+__pycache__
+*.swp
+/data/sapflux/0.1.5/csv/*
+/data/sapflux/0.1.5/RData/*
+/data/sapflux/0.1.5/prepared/*
+!/data/sapflux/0.1.5/prepared/solo_3/

@@ -1,0 +1,4 @@
+_target_: models.uncertainty.sota.enbpi.EnbPIModel
+adaptive_sigma: false
+past_window_len: 100
+beta_calc_bins: 20

@@ -1,0 +1,21 @@
+# General
+pypot_from_matplot: False
+# Prediction Plots:
+pred_vega: False
+pred_vega_add_calib: False
+pred_matplot: False
+pred_full_ts_matplot: False
+ensemble_matplot: True
+# Epsilon Plots:
+eps_matplot: False
+# Prediction Table:
+pred_table: False
+# Rolling Metrics
+rolling_overall: False
+rolling_per_ts: False
+rolling_as_list: False
+rolling_window: 40
+# Attention
+att_plot_vega: False
+att_plot_vega_topk: 30
+att_hist_matplot: False
