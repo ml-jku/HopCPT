@@ -1,5 +1,5 @@
 _target_: loader.config.TSDataConfig
-dataset_type: hydro-200_random_list.txt
+dataset_type: hydro-531_basin_list.txt
 paths:
   - /some_base_dir/data/hydrology
 add_config:
