@@ -99,6 +99,8 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
         self._conformal_sel_abs = kwargs['conf_eps_abs']
         self._conformal_sel_beta = kwargs['conf_sel_beta']
         self._sum_assoc_for_qc = kwargs['mix_head_dist']
+        self._conf_quantile_mode = kwargs['conf_quantile_mode']
+        assert self._conf_quantile_mode in ['sample', 'cdf', 'debug']
         if self._loss_mode in [LOSS_MODE_MIX, LOSS_MODE_EPS_CDF]:
             self._hopfield_heads = 1
         elif self._loss_mode == LOSS_MODE_MSE:
@@ -145,7 +147,8 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
         self._ctx_history_state = None
         self._mix_hist_states = None
         if self._pre_encode_context:
-            ctx_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window)
+            ctx_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window,
+                                                  fc_state_dim=kwargs['fc_state_dim'])
             ctx_enc_hidden = tuple([ctx_size] * self._ctx_enc_hiddenL)
             self._ctx_encoding = ContextEncodeModule(
                 ctx_input_dim=ctx_size, ctx_enc_hidden=ctx_enc_hidden, ctx_out_dim=ctx_size,
@@ -163,7 +166,8 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
                 self._extra_ctx_pos_encoding = None
 
         else:
-            ctx_encoded_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window)
+            ctx_encoded_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window,
+                                                          fc_state_dim=kwargs['fc_state_dim'])
             self._ctx_encoding = lambda **enc_args: (enc_args['context'], None)
             self._extra_ctx_pos_encoding = None
 
@@ -210,12 +214,15 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
 
     def _calibrate(self, calib_data: [PICalibData], alphas, **kwargs) -> [PICalibArtifacts]:
         Y_hat = []
+        fc_state_step = []
         calib_artifacts = []
         for c_data in calib_data:
-            Y_hat.append(self._forcast_service.predict(
+            c_result = self._forcast_service.predict(
                 FCPredictionData(ts_id=c_data.ts_id, X_past=c_data.X_pre_calib, Y_past=c_data.Y_pre_calib,
-                                 X_step=c_data.X_calib, step_offset=c_data.step_offset)).point)
-            calib_artifacts.append(PICalibArtifacts(fc_Y_hat=Y_hat[-1]))
+                                 X_step=c_data.X_calib, step_offset=c_data.step_offset))
+            Y_hat.append(c_result.point)
+            fc_state_step.append(c_result.state)
+            calib_artifacts.append(PICalibArtifacts(fc_Y_hat=Y_hat[-1], fc_state_step=fc_state_step[-1]))
 
         # Init Variance for Mixing
         if self._loss_mode == LOSS_MODE_MIX:
@@ -234,8 +241,9 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
                 int_model_path = trainer_config.trainer_config.init_model
             self.load_state(int_model_path, self.device)
         else:
-            self._train_model(calib_data, Y_hat=Y_hat, alphas=self._train_alphas, experiment_config=experiment_config,
-                              trainer_config=trainer_config, history_size=self.max_mem_size)
+            self._train_model(calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step, alphas=self._train_alphas,
+                              experiment_config=experiment_config, trainer_config=trainer_config,
+                              history_size=self.max_mem_size)
         return calib_artifacts
 
     def calibrate_individual(self, calib_data: PICalibData, alpha, calib_artifact: Optional[PICalibArtifacts],
@@ -245,6 +253,7 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
         self._ctx_history_state, self._mix_hist_states =\
             self._fill_memory(calib_data, calib_artifact, mix_calib_data=mix_calib_data,
                               mix_calib_artifacts=mix_calib_artifact)
+        calib_artifact.fc_state_step = None  # Save Memory
         return calib_artifact
 
     def pre_predict(self, **kwargs):
@@ -285,8 +294,8 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
             if self._conformal_selection:
                 assoc_matrix = self._reduce_assoc_matrix(association_matrix=assoc_matrix, alpha=alpha,
                                                          reduce_alpha=reduce_alpha)
-                eps_q_low, eps_q_high, _ = self._get_quantile_conformal(
-                    association_matrix=assoc_matrix, alpha=self._alpha_t,
+                eps_q_low, eps_q_high, _, add_quantile_info = self._get_quantile_conformal(
+                    association_matrix=assoc_matrix, alpha=self._alpha_t, inference=True,
                     eps=self._memory.eps_chronological[-self._mem_past_window:])
         else:
             selected_mix_ts = self.mix_data_service.select_mix_inference_step_ids(pred_data.ts_id)
@@ -308,8 +317,8 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
             if self._conformal_selection:
                 assoc_matrix = self._reduce_assoc_matrix(association_matrix=assoc_matrix, alpha=alpha,
                                                          reduce_alpha=reduce_alpha)
-                eps_q_low, eps_q_high, _ = self._get_quantile_conformal(
-                    association_matrix=assoc_matrix, alpha=self._alpha_t,
+                eps_q_low, eps_q_high, _, add_quantile_info = self._get_quantile_conformal(
+                    association_matrix=assoc_matrix, alpha=self._alpha_t, inference=True,
                     eps=self._memory.eps if self.mix_data_service.mode is None
                     else self._get_data_with_mix_mem_eps(selected_mix_ts, selected_ts_subsets))
         # Generate Interval
@@ -317,6 +326,7 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
         prediction_result = PIModelPrediction(pred_interval=pred_int, fc_Y_hat=Y_hat)
         prediction_result.eps_ctx = ctx_encoded.detach()
         prediction_result.uc_attention = uc_attention
+        prediction_result.quantile_info = add_quantile_info
         return prediction_result
 
     def _post_predict_step(self, Y_step, pred_result: PIModelPrediction, pred_data: PIPredictionStepData, **kwargs):
@@ -349,13 +359,16 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
             self._alpha_t = max(0, min(1, self._alpha_t))  # Make sure it is between 0 and 1
 
     def _encode_and_fc(self, ts_id, X_past, Y_past, X_step, step_abs, eps_past, ctx_past, ctx_history_state):
-        Y_hat = self._forcast_service.predict(
+        fc_result = self._forcast_service.predict(
             FCPredictionData(ts_id=ts_id, X_past=X_past, Y_past=Y_past, X_step=X_step,
-                             step_offset=step_abs)).point
+                             step_offset=step_abs))
+        Y_hat = fc_result.point
+        fc_state_step = fc_result.state
         ctx = self._ctx_gen.calc_single(
             X_past=X_past[-self._ctx_past_window:], Y_past=Y_past[-self._ctx_past_window:],
             eps_past=eps_past[-self._ctx_past_window:] if eps_past is not None else None,
             X_step=X_step.squeeze(dim=0), Y_hat_step=Y_hat.squeeze(dim=0),
+            fc_state_step=fc_state_step.squeeze(dim=0) if fc_state_step is not None else None,
             ts_id_enc=torch.tensor([self._ctx_gen.get_ts_id_enc(ts_id)], dtype=torch.long,
                                    device=self._current_device))
         # Encode Context
@@ -382,8 +395,9 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
     def _encode_ctx(self, context, step_no) -> Tuple[torch.tensor, torch.tensor]:
         return self._ctx_encoding(context=context, step_no=step_no, context_past=None, context_past_state=None)
 
-    def _get_calib_ctx(self, calib_data, Y_hat) -> Tuple[torch.tensor, int, int]:
+    def _get_calib_ctx(self, calib_data, Y_hat, fc_state_step=None) -> Tuple[torch.tensor, int, int]:
         return self._ctx_gen.calib_data_to_ctx(calib_data, Y_hat=Y_hat, past_window=self._ctx_past_window,
+                                               fc_state_step=fc_state_step,
                                                use_pre_calib_eps_for_calib=self._use_pre_calib_eps_for_calib)
 
     #
@@ -768,7 +782,7 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
             for b_idx in range(batches):
                 # TODO current quantile method does not work with batches!
                 end = start + seq_len
-                eps_q_low[start:end], eps_q_high[start:end], val_beta[start:end] = self._get_quantile_conformal(
+                eps_q_low[start:end], eps_q_high[start:end], val_beta[start:end], _ = self._get_quantile_conformal(
                     assoc_matrix[b_idx].squeeze(0), eps=eps[b_idx], alpha=alpha, detach=True
                 )
                 start = end
@@ -786,41 +800,55 @@ class EpsPredictionHopfield(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryM
             association_matrix = association_matrix[idx]
         return association_matrix
 
-    def _get_quantile_conformal(self, association_matrix, eps, alpha, detach=False) -> torch.tensor:
+    def _get_quantile_conformal(self, association_matrix, eps, alpha, detach=False, inference=False) -> torch.tensor:
         assert eps.shape[1] == 1
+        debug = self._conf_quantile_mode == 'debug'
+        add_info = {} if debug else None
         if detach:
             eps = eps.detach()
             association_matrix = association_matrix.detach()
-        if True:  # Sample
+        if self._conf_quantile_mode in ['sample', 'debug']:  # Sample
             # ToDo Maybe Scale association matrix (More or less sharp)
             sampled_selection = torch.multinomial(association_matrix, num_samples=1000, replacement=True)
-            eps = eps.squeeze(1).unsqueeze(0)
-            selected_eps = torch.cat([torch.index_select(eps, index=idx_, dim=1) for idx_ in sampled_selection], dim=0)
-        elif False:  # CDF Approach
+            selected_eps = torch.cat([torch.index_select(eps.squeeze(1).unsqueeze(0), index=idx_, dim=1)
+                                      for idx_ in sampled_selection], dim=0)
+            if inference and debug:
+                assert sampled_selection.shape[0] == 1
+                add_info['alpha'] = alpha
+                add_info['sample_base'] = association_matrix.shape[1]
+                add_info['sample_count'] = torch.unique(sampled_selection, dim=1).shape[1]
+                add_info['sample_sum'] = torch.index_select(association_matrix, index=sampled_selection[0].unique(), dim=1).sum().item()
+        if self._conf_quantile_mode in ['cdf', 'debug']:  # CDF Approach
             if self._conformal_sel_abs:
                 raise NotImplemented("Not Implemented")
                 #return -quantile_value, quantile_value, alpha / 2
             else:
-                #TODO: Not tested
-                sorted_eps, sort_idx = torch.sort(eps.T)
+                sorted_eps, sort_idx = torch.sort(eps.T, dim=1)
                 tmp = association_matrix[:, sort_idx.squeeze()]
                 c_sum = torch.cumsum(tmp, dim=1)
-                idx = torch.arange(c_sum.shape[1], 0, -1)
+                idx = torch.arange(c_sum.shape[1], 0, -1, device=association_matrix.device)
                 tmp2 = torch.where(c_sum >= alpha / 2, 1, 0) * idx
                 quantile_idx_low = torch.argmax(tmp2, 1, keepdim=True)
                 quantile_value_low = sorted_eps[0, quantile_idx_low]
                 tmp3 = torch.where(c_sum >= 1 - (alpha / 2), 1, 0) * idx
                 quantile_idx_high = torch.argmax(tmp3, 1, keepdim=True)
                 quantile_value_high = sorted_eps[0, quantile_idx_high]
-                return quantile_value_low.squeeze(), quantile_value_high.squeeze(), alpha / 2
-        else:  # Top K
+                if inference and debug:
+                    add_info['cdf_low'] = quantile_value_low.item()
+                    add_info['cdf_high'] = quantile_value_high.item()
+                elif not debug:
+                    return quantile_value_low.squeeze(), quantile_value_high.squeeze(), alpha / 2, add_info
+        if False:  # Top K
             _, selected_idx = torch.topk(association_matrix, 50, dim=1)
             eps = eps.squeeze(1).unsqueeze(0)
             selected_eps = torch.cat([torch.index_select(eps, index=idx_, dim=1) for idx_ in selected_idx], dim=0)
         q_conformal_low, q_conformal_high, beta = self._calc_conformal_quantiles(
             selected_eps, alpha, no_beta_bins=self._conformal_sel_beta, use_absolute_eps=self._conformal_sel_abs
         )
-        return q_conformal_low, q_conformal_high, beta
+        if inference and debug:
+            add_info['sample_low'] = q_conformal_low.item()
+            add_info['sample_high'] = q_conformal_high.item()
+        return q_conformal_low, q_conformal_high, beta, add_info
 
     #
     # Persistence

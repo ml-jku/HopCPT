@@ -15,7 +15,7 @@ from loader.toy_loader import TOY_DATA_PREFIX, get_toy_data
 from loader.hydrology import HYDRO_TYPE_PREFIX, get_hydro_data
 
 NSDB_DATASET = ['nsdb-60m-2020', 'nsdb-60m-2019', 'nsdb-60m-2018-20', 'nsdb-30m-2020', 'nsdb-30m-2019',
-                'nsdb-30m-2018-20']
+                'nsdb-30m-2018-20', 'nsdb-60m-2019-wCoord', 'nsdb-60m-2018-20-wCoord']
 AIR_QUALITY = ['air-25', 'air-10', 'air-25-half', 'air-10-half']
 
 
@@ -197,10 +197,18 @@ def load_nsdb_data(dataset_type, data_path):
         drop_every_n = 1
     else:
         raise ValueError("Type not supported")
+    append_coords = dataset_type.endswith("-wCoord")
     data = data.iloc[::drop_every_n, :]
     Y_full = data['dhi']
     X_full = data.loc[:, data.columns != 'dhi']
     X_full.drop(columns=X_full.columns[0:6], inplace=True)  # Drop Date Stuff
+    if append_coords:
+        p = Path(data_path)
+        coordinates = pd.read_csv(p.parent.parent / "solar_coordinates.csv")
+        lat = coordinates[coordinates["location"] == p.stem]['latitude'].item()
+        long = coordinates[coordinates["location"] == p.stem]['longitude'].item()
+        X_full["latitude"] = lat
+        X_full["longitude"] = long
     return torch.from_numpy(X_full.to_numpy()).float(), torch.from_numpy(Y_full.to_numpy()).float()
 
 

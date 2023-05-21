@@ -22,6 +22,10 @@ class NexCP(PIModel):
         # self._roh_LS = kwargs['rho_ls']
         self._last_k = kwargs['max_past']
         self._memory = FiFoMemory(self._last_k, store_step_no=False)
+        self._use_adaptiveci = kwargs.get('use_adaptiveci', False)
+        if self._use_adaptiveci:
+            self._gamma = kwargs['gamma']
+        self._alpha_t = None
 
     def _calibrate(self, calib_data: [PICalibData], alphas, **kwargs) -> [PICalibArtifacts]:
         pass
@@ -36,8 +40,12 @@ class NexCP(PIModel):
         self._memory.add_transient(torch.empty_like(eps), eps)
         return calib_artifact
 
+    def pre_predict(self, **kwargs):
+        super().pre_predict(**kwargs)
+        self._alpha_t = kwargs['alpha']  # Reset
+
     def _predict_step(self, pred_data: PIPredictionStepData, **kwargs):
-        alpha, X_step, X_past, Y_past, _, step_abs =\
+        _, X_step, X_past, Y_past, _, step_abs =\
             pred_data.alpha, pred_data.X_step, pred_data.X_past, pred_data.Y_past, pred_data.eps_past,\
             pred_data.step_offset_overall
         # Calculate y_hat and prediction interval for current step
@@ -48,8 +56,11 @@ class NexCP(PIModel):
         past_eps = torch.abs(self._memory.eps_chronological).squeeze(-1).cpu().numpy()
         weights = self._get_weights(min(self._last_k, len(past_eps)))
         sort_idx = np.argsort(past_eps)
-        quantile_idx = np.min(np.where(np.cumsum(weights[sort_idx]) >= 1 - alpha))
-        quantile_value = np.sort(past_eps)[quantile_idx]
+        try:
+            quantile_idx = np.min(np.where(np.cumsum(weights[sort_idx]) >= 1 - self._alpha_t))
+            quantile_value = np.sort(past_eps)[quantile_idx]
+        except:
+            quantile_value = np.sort(past_eps)[-1]
 
         # Calc Interval
         q_high = Y_hat + quantile_value
@@ -61,6 +72,14 @@ class NexCP(PIModel):
         # Update memory
         eps = calc_residuals(Y=Y_step, Y_hat=pred_result.fc_Y_hat)
         self._memory.add_transient(cxt=torch.empty_like(eps), eps=eps)
+        # If Adaptive:
+        if self._use_adaptiveci:
+            alpha = pred_data.alpha
+            pred_int = pred_result.pred_interval
+            err_step = 0 if pred_int[0] <= Y_step <= pred_int[1] else 1
+            # Simple Mode
+            self._alpha_t = self._alpha_t + self._gamma * (alpha - err_step)
+            self._alpha_t = max(0, min(1, self._alpha_t))  # Make sure it is between 0 and 1
 
     def _get_weights(self, length):
         if self.mode in ('nexCP-LS', 'nexCP-WSL'):

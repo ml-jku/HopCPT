@@ -170,7 +170,7 @@ class BaseTrainer(ABC):
             self._train_epoch(epoch)
 
             if self._lr_scheduler is not None:
-                self._lr_scheduler.step()
+                self._lr_scheduler.step(epoch=epoch)
 
             model_saved = False
             if self._save_every > 0 and epoch % self._save_every == 0:

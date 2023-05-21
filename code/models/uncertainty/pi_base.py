@@ -51,6 +51,7 @@ class PICalibArtifacts:
     fc_Y_hat: Optional[Union[torch.Tensor, np.ndarray]] = None
     fc_interval: Optional[Tuple[Union[torch.Tensor, np.ndarray], Union[torch.Tensor, np.ndarray]]] = None
     eps: Optional[Union[torch.Tensor, np.ndarray]] = None
+    fc_state_step: Optional[Union[torch.Tensor, np.ndarray]] = None
     add_info = dict()
 
 

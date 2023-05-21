@@ -158,11 +158,17 @@ class UncertaintyService:
     def get_mix_data_service(self, ts_id, alpha):
         return self._get_model(ts_id, alpha).mix_data_service
 
+    def has_calib_artifact(self, dataset, alpha):
+        return self._has_access(self._calib_artefacts, dataset.ts_id, alpha, force_per_data=True)
+
     def get_calib_artifact(self, dataset, alpha):
         return self._access(self._calib_artefacts, dataset.ts_id, alpha, force_per_data=True)
 
     def _set_calib_artifact(self, ts_id, alpha, artefact):
         self._set_access(self._calib_artefacts, ts_id, alpha, artefact, force_per_data=True)
+
+    def has_model(self, ts_id, alpha):
+        return self._has_access(self._uc_models, ts_id, alpha)
 
     def _get_model(self, ts_id, alpha):
         return self._access(self._uc_models, ts_id, alpha)
@@ -175,6 +181,10 @@ class UncertaintyService:
 
     def _set_access(self, access_dict, ts_id, alpha, element, force_per_data=False):
         access_dict[ts_id if self._own_per_data or force_per_data else "0"][str(alpha) if self._own_per_alpha else "0"] = element
+
+    def _has_access(self, access_dict, ts_id, alpha, force_per_data=False):
+        return (ts_id if self._own_per_data or force_per_data else "0") in access_dict and\
+               (str(alpha) if self._own_per_alpha else "0") in access_dict[ts_id if self._own_per_data or force_per_data else "0"]
 
     @staticmethod
     def _map_to_calib_data(dataset):

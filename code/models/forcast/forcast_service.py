@@ -27,7 +27,7 @@ PERSISTENCE_MODEL_DICT = {
 class ForcastService:
 
     def __init__(self, int_fc_model: Callable[[], ForcastModel], task_config: TaskConfig, model_config,
-                 data_config: TSDataConfig, persist_dir: str, save_new_reg_bak=False) -> None:
+                 data_config: TSDataConfig, persist_dir: str, save_new_reg_bak=False, **kwargs) -> None:
         super().__init__()
         self._persist_service = ModelPersistenceService(model_dict=PERSISTENCE_MODEL_DICT, base_directory=persist_dir,
                                                         save_new_reg_bak=save_new_reg_bak)
@@ -55,10 +55,16 @@ class ForcastService:
         self._fc_models_access: Dict[str, Dict[str, Union[ForcastModel, List[ForcastModel]]]] =\
             defaultdict(lambda: defaultdict(list)) if self.has_ensemble else defaultdict(dict)
         self._fc_models: List[ForcastModel] = []
+        self._trainer_config = kwargs.get("trainer_config", None)
+        self._experiment_config = kwargs.get("experiment_config", None)
 
     @property
     def has_ensemble(self):
         return self._n_estimator > 1
+
+    @property
+    def fc_state_dim(self):
+        return self._fc_models[0].fc_state_dim if self._fc_models is not None else None
 
     def prepare(self, datasets: List[ChronoSplittedTsDataset], alphas) -> List[TsDataset]:
         fc_prototype: ForcastModel = self._init_fc_model()
@@ -156,9 +162,22 @@ class ForcastService:
         else:
             if not self._own_per_alpha:
                 model = self._init_fc_model()
-                LOGGER.info(f"Train Forcast model ({idx+1}/{self._n_estimator}) for all TS and alphas: {alphas}.")
-                raise ValueError("Not implemented yet!")
-                #self._set_model(None, None, model)
+                if type(model).__name__ == "PrecomputedNeuralHydrologyForcast":
+                    assert type(model).__name__ == "PrecomputedNeuralHydrologyForcast"
+                    # TODO HACK - STILL CALL TRAINING METHOD MULTIPLE TIMES FOR FC THAT HAVE PRELOAODED DATASET
+                    LOGGER.info(f"Train Forcast model ({idx+1}/{self._n_estimator}) for all TS and alphas: {alphas}.")
+                    for dataset in datasets:
+                        assert boostrap_mask.get(dataset.ts_id, None) is None
+                        model.train(Y=dataset.Y_train, X=dataset.X_train, alpha=alphas,
+                                    planned_fc_steps=dataset.no_calib_steps + dataset.no_test_steps if not self._is_enbPiBoostrap else None,
+                                    X_full=dataset.X_full,
+                                    ts_id=dataset.ts_id,
+                                    y_normalize_props=dataset.Y_normalize_props)
+                    self._set_model(None, None, model)
+                elif type(model).__name__ == "GlobalLSTM":
+                    LOGGER.info(f"Train Forcast model ({idx+1}/{self._n_estimator}) for all TS and alphas: {alphas}.")
+                    model.train_global(datasets, alphas, self._trainer_config, self._experiment_config)
+                    self._set_model(None, None, model)
             else:
                 for alpha in alphas:
                     model = self._init_fc_model()

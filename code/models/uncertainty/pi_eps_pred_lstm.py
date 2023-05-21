@@ -44,12 +44,14 @@ class EpsPredictionLSTM(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryMixin
 
         # Init Network
         if self._pre_encode_context:
-            ctx_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window)
+            ctx_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window,
+                                                  fc_state_dim=kwargs['fc_state_dim'])
             ctx_encoded_size = ctx_size // 2
             ctx_enc_hidden = ctx_size
             self._ctx_encoding = FcModel(input_dim=ctx_size, out_dim=ctx_encoded_size, hidden=(ctx_enc_hidden,))
         else:
-            ctx_encoded_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window)
+            ctx_encoded_size = self._ctx_gen.context_size(kwargs['no_x_features'], self._ctx_past_window,
+                                                          fc_state_dim=kwargs['fc_state_dim'])
             self._ctx_encoding = lambda **enc_args: enc_args
 
         if self._predict_beta:
@@ -74,17 +76,20 @@ class EpsPredictionLSTM(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryMixin
 
     def _calibrate(self, calib_data: [PICalibData], alphas, **kwargs) -> [PICalibArtifacts]:
         Y_hat = []
+        fc_state_step = []
         calib_artifacts = []
         for c_data in calib_data:
-            Y_hat.append(self._forcast_service.predict(
+            c_result = self._forcast_service.predict(
                 FCPredictionData(ts_id=c_data.ts_id, X_past=c_data.X_pre_calib, Y_past=c_data.Y_pre_calib,
-                                 X_step=c_data.X_calib, step_offset=c_data.step_offset)).point)
-            calib_artifacts.append(PICalibArtifacts(fc_Y_hat=Y_hat[-1]))
+                                 X_step=c_data.X_calib, step_offset=c_data.step_offset))
+            Y_hat.append(c_result.point)
+            fc_state_step.append(c_result.state)
+            calib_artifacts.append(PICalibArtifacts(fc_Y_hat=Y_hat[-1], fc_state_step=fc_state_step[-1]))
 
         trainer_config = kwargs['trainer_config']
         experiment_config = kwargs['experiment_config']
-        self._train_model(calib_data, Y_hat=Y_hat, alphas=alphas, experiment_config=experiment_config,
-                          trainer_config=trainer_config)
+        self._train_model(calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step, alphas=alphas,
+                          experiment_config=experiment_config, trainer_config=trainer_config)
         return calib_artifacts
 
     def calibrate_individual(self, calib_data: PICalibData, alpha, calib_artifact: Optional[PICalibArtifacts],
@@ -105,13 +110,16 @@ class EpsPredictionLSTM(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryMixin
         alpha, X_step, X_past, Y_past, eps_past = pred_data.alpha, pred_data.X_step, pred_data.X_past,\
                                                   pred_data.Y_past, pred_data.eps_past
         # Calculate y_hat and prediction interval for current step
-        Y_hat = self._forcast_service.predict(
-            FCPredictionData(ts_id=pred_data.ts_id, X_past=X_past, Y_past=Y_past, X_step=X_step,
-                             step_offset=pred_data.step_offset_overall)).point
+        fc_result = self._forcast_service.predict(
+            FCPredictionData(ts_id=ts_id, X_past=X_past, Y_past=Y_past, X_step=X_step,
+                             step_offset=step_abs))
+        Y_hat = fc_result.point
+        fc_state_step = fc_result.state
         ctx = self._ctx_gen.calc_single(
             X_past=X_past[-self._ctx_past_window:], Y_past=Y_past[-self._ctx_past_window:],
             eps_past=eps_past[-self._ctx_past_window:] if eps_past is not None else None,
             X_step=X_step.squeeze(dim=0), Y_hat_step=Y_hat.squeeze(dim=0),
+            fc_state_step=fc_state_step.squeeze(dim=0) if fc_state_step is not None else None,
             ts_id_enc=torch.tensor([self._ctx_gen.get_ts_id_enc(pred_data.ts_id)], dtype=torch.long))
         ctx_encoded = self._encode_ctx(context=ctx, step_no=None)[0]
         if self._pred_many_to_one:
@@ -150,8 +158,9 @@ class EpsPredictionLSTM(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryMixin
     def _encode_ctx(self, context, step_no) -> Tuple[torch.tensor, torch.tensor]:
         return self._ctx_encoding(context=context, step_no=step_no), None
 
-    def _get_calib_ctx(self, calib_data, Y_hat) -> Tuple[torch.tensor, int, int]:
+    def _get_calib_ctx(self, calib_data, Y_hat, fc_state_step=None) -> Tuple[torch.tensor, int, int]:
         return self._ctx_gen.calib_data_to_ctx(calib_data, Y_hat=Y_hat, past_window=self._ctx_past_window,
+                                               fc_state_step=fc_state_step,
                                                use_pre_calib_eps_for_calib=self._use_pre_calib_eps_for_calib)
 
     #

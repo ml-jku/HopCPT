@@ -47,7 +47,7 @@ def my_app(cfg: DictConfig):
     datasets = fc_service.prepare(datasets, alphas)
 
     # Calibrate/Train UC
-    uc_service = _init_uc(cfg, fc_service, datasets, uc_persist_dir,
+    uc_service = _init_uc(cfg, fc_service, datasets, uc_persist_dir, fc_state_dim=fc_service.fc_state_dim,
                           record_attention=cfg.evaluation['att_plot_vega'] or cfg.evaluation['att_hist_matplot'])
     uc_service.prepare(datasets, alphas, experiment_config=cfg.experiment_data, calib_trainer_config=cfg.trainer)
 
@@ -58,8 +58,10 @@ def my_app(cfg: DictConfig):
         model = cfg.model_uc._target_.split(".")[-1]
         if model in ['EnbPIModel']:
             Evaluator.evaluate_sota_on_validation(uc_service, datasets, alphas, no_calib=True)
-        elif model in ['AdaptiveCI', 'NexCP', 'SPICModel', 'EpsSelectionPIStat']:
+        elif model in ['AdaptiveCI', 'NexCP', 'SPICModel', 'EpsSelectionPIStat', 'Bluecat']:
             Evaluator.evaluate_sota_on_validation(uc_service, datasets, alphas, no_calib=False)
+        elif model == 'EpsPredictionHopfield' and cfg.model_uc.use_adaptiveci:
+            Evaluator.evaluate_sota_on_validation(uc_service, datasets, alphas, no_calib=False, prefix="extraval")
         else:
             LOGGER.info("Skip Evaluation")
     wandb.finish()
@@ -79,10 +81,11 @@ def _setup(config):
             mode = exp_data.offline
     else:
         mode = 'online'
-    wandb.init(project=exp_data.project_name, name=HydraConfig.get().job.name, #dir=Path.cwd(),
-               entity=exp_data.project_entity if hasattr(exp_data, "project_entity") else None, # Backward Compatible if attr not existing
+    wandb.init(project=exp_data.project_name, name=HydraConfig.get().job.name,  #dir=Path.cwd(),
+               entity=exp_data.project_entity if hasattr(exp_data, "project_entity") else None,  # Backward Compatible if attr not existing
                config=OmegaConf.to_container(config, resolve=True, throw_on_missing=True), mode=mode,
-               tags=config.wandb.tags, notes=config.wandb.notes, group=config.wandb.group)
+               tags=config.wandb.tags, notes=config.wandb.notes, group=config.wandb.group,
+               settings=wandb.Settings(start_method="fork", _service_wait=240))
 
 
 def _init_fc(config, datasets, fc_persist_dir) -> ForcastService:
@@ -90,14 +93,15 @@ def _init_fc(config, datasets, fc_persist_dir) -> ForcastService:
     return ForcastService(lambda: hydra.utils.instantiate(config.model_fc, no_x_features=datasets[0].no_x_features,
                                                           alpha=config.task.alpha),
                           data_config=config.dataset, task_config=config.task, model_config=config.model_fc,
-                          persist_dir=fc_persist_dir)
+                          persist_dir=fc_persist_dir, trainer_config=config.trainer, experiment_config=config.experiment_data)
 
 
-def _init_uc(config, fc_service, datasets, uc_persist_dir, record_attention) -> UncertaintyService:
+def _init_uc(config, fc_service, datasets, uc_persist_dir, fc_state_dim, record_attention) -> UncertaintyService:
     LOGGER.info('Initialize uncertainty service.')
     return UncertaintyService(lambda: hydra.utils.instantiate(config.model_uc, no_x_features=datasets[0].no_x_features,
                                                               alpha=config.task.alpha,
                                                               ts_ids=[ts.ts_id for ts in datasets],
+                                                              fc_state_dim=fc_state_dim,
                                                               record_attention=record_attention),
                               fc_service=fc_service, save_uc_models=SAVE_LOAD_UC_MODEL, data_config=config.dataset,
                               task_config=config.task, persist_dir=uc_persist_dir)
@@ -108,6 +112,7 @@ class Evaluator:
     def evaluate(uc_service, datasets, alphas, eval_config):
         overall_metrics_per_alpha = defaultdict(lambda: defaultdict(list))
         rolling_dfs = defaultdict(list)
+        quantile_info_dfs = defaultdict(list)
         registered_overall = None
         for run_no, (dataset, alpha) in enumerate(itertools.product(datasets, alphas)):
             registered_overall, registered_per_ts = Evaluator._setup_metrics(dataset)
@@ -116,11 +121,13 @@ class Evaluator:
                 uc_service, dataset, alpha, other_datasets=[d for d in datasets if d.ts_id != dataset.ts_id]
             )
             calib_artifact = uc_service.get_calib_artifact(dataset, alpha)
-            metrics_per_alpha, roll_df = Evaluator._log_eval_finished(
+            metrics_per_alpha, extra_dfs = Evaluator._log_eval_finished(
                 uc_service, prediction_log, prediction_log_artifacts, dataset, eps, alpha, calib_artifact,
                 registered_per_ts, eval_config, is_first_dataset=run_no < len(alphas))
-            if roll_df is not None:
-                rolling_dfs[registered_per_ts[1]].append(roll_df)
+            if 'rolling_df' in extra_dfs:
+                rolling_dfs[registered_per_ts[1]].append(extra_dfs['rolling_df'])
+            if 'quantile_info' in extra_dfs:
+                quantile_info_dfs[registered_per_ts[1]].append(extra_dfs['quantile_info'])
             for metric, value in metrics_per_alpha.items():
                 if metric in registered_overall[0]:
                     overall_metrics_per_alpha[alpha][metric].append(value)
@@ -132,12 +139,15 @@ class Evaluator:
             })
         # Log Rolling Config
         Evaluator.log_rolling_metrics(rolling_dfs, eval_config)
+        # Check Quantile Info
+        if len(quantile_info_dfs) > 0:
+            quantile_info = pd.concat(itertools.chain.from_iterable(quantile_info_dfs.values()))
 
     @staticmethod
-    def evaluate_sota_on_validation(uc_service, datasets, alphas, no_calib=False):
+    def evaluate_sota_on_validation(uc_service, datasets, alphas, no_calib=False, prefix="val"):
         overall_metrics = defaultdict(list)
         overall_metrics_per_alpha = defaultdict(lambda: defaultdict(list))
-        wandb.define_metric(f"val/winkler_score_norm", summary='min', goal='minimize')
+        wandb.define_metric(f"{prefix}/winkler_score_norm", summary='min', goal='minimize')
         for no_dataset, dataset in enumerate(datasets):
             # Make Calibration set to calib/val set
             calib_size = dataset.no_calib_steps
@@ -150,6 +160,10 @@ class Evaluator:
             for no_alpha, alpha in enumerate(alphas):
                 # registered_overall, registered_per_ts = Evaluator._setup_metrics(dataset)
                 LOGGER.info(f"Evaluation on VALIDATION Number {no_dataset}/{no_alpha}: Start evaluation for TS {dataset.ts_id} with alpha {alpha}")
+                if not no_calib and uc_service.has_calib_artifact(dataset, alpha):
+                    c_artifact = uc_service.get_calib_artifact(dataset, alpha)
+                    if c_artifact is not None and len(c_artifact.fc_Y_hat) > val_calib:
+                        c_artifact.fc_Y_hat = c_artifact.fc_Y_hat[-val_calib:]
                 #Evaluate
                 prediction_log, prediction_log_artifacts, eps = Evaluator._evaluate_single_ts(
                     uc_service, dataset, alpha, other_datasets=[d for d in datasets if d.ts_id != dataset.ts_id]
@@ -166,9 +180,9 @@ class Evaluator:
         for alpha, metrics in overall_metrics_per_alpha.items():
             delta_coverage = (sum(metrics['covered']) / sum(metrics['steps'])) - (1 - alpha)
             miss_coverages.append(max(0, delta_coverage * -1.0))
-            to_log[f'val/CoverageDiff_A_{alpha}'] = delta_coverage
-        to_log[f'val/MissCoverage'] = sum(miss_coverages)
-        to_log.update({**{f"val/{metric}": np.mean(values) for metric, values in overall_metrics.items()}})
+            to_log[f'{prefix}/CoverageDiff_A_{alpha}'] = delta_coverage
+        to_log[f'{prefix}/MissCoverage'] = sum(miss_coverages)
+        to_log.update({**{f"{prefix}/{metric}": np.mean(values) for metric, values in overall_metrics.items()}})
         wandb.log(to_log)
         LOGGER.info(to_log)
 
@@ -307,6 +321,8 @@ class Evaluator:
         step_log_artifact = dict()
         if prediction.uc_attention is not None:
             step_log_artifact['uc_attention'] = prediction.uc_attention
+        if hasattr(prediction, "quantile_info") and prediction.quantile_info is not None:
+            step_log_artifact['quantile_info'] = prediction.quantile_info
         return step_log_dict, step_log_artifact
 
     @staticmethod
@@ -314,6 +330,7 @@ class Evaluator:
                            dataset: TsDataset, eps: List[float], alpha: float, calib_artifact: PICalibArtifacts,
                            registered_per_ts, eval_config, is_first_dataset):
         # Set Config Options
+        extra_dfs = dict()
         log_table = eval_config['pred_table']
         log_rolling_metrics = eval_config['rolling_overall'] or eval_config['rolling_per_ts'] or eval_config['rolling_as_list']
         log_pred_vega = eval_config['pred_vega']
@@ -407,8 +424,7 @@ class Evaluator:
                     window_size=roll_window_size,
                 )
                 rolling_df['alpha'] = alpha
-        else:
-            rolling_df = None
+                extra_dfs['rolling_df'] = rolling_df
 
         # Save Metrics with according prefix
         eval_with_prefix = dict(alpha=alpha)
@@ -428,6 +444,11 @@ class Evaluator:
         if log_att_vega and 'uc_attention' in prediction_artifacts and is_first_dataset:  # Only For first dataset
             raise ValueError("Not supported!")
 
+        if prediction_artifacts is not None and 'quantile_info' in prediction_artifacts:
+            quantile_info_df = pd.DataFrame(prediction_artifacts['quantile_info'])
+            quantile_info_df["low_dif"] = quantile_info_df['cdf_low'] - quantile_info_df['sample_low']
+            quantile_info_df["high_dif"] = quantile_info_df['cdf_high'] - quantile_info_df['sample_high']
+            extra_dfs['quantile_info'] = quantile_info_df
         #
         # Plot Prediction (with Calib) Matplotlib
         #
@@ -513,7 +534,7 @@ class Evaluator:
             raise ValueError("Not supported!")
 
         wandb.log(wandb_log)
-        return eval_metrics, rolling_df
+        return eval_metrics, extra_dfs
 
     @staticmethod
     def _calc_rolling(df_parts, calc_funcs, cols, window_size):

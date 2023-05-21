@@ -38,6 +38,11 @@ class FCModelPrediction(ABC):
 
     @property
     @abstractmethod
+    def state(self) -> Optional[Union[np.ndarray, torch.tensor]]:
+        pass
+
+    @property
+    @abstractmethod
     def no_of_steps(self):
         pass
 
@@ -67,6 +72,7 @@ class FCModelPrediction(ABC):
 class FcSingleModelPrediction(FCModelPrediction):
     point: Optional[Union[np.ndarray, torch.tensor]] = None
     quantile: Optional[Tuple[Union[np.ndarray, torch.tensor], Union[np.ndarray, torch.tensor]]] = None
+    state: Optional[Union[np.ndarray, torch.tensor]] = None
 
     def __post_init__(self):
         super().__init__()
@@ -79,18 +85,23 @@ class FcSingleModelPrediction(FCModelPrediction):
         if to_tensor:
             if isinstance(self.point, np.ndarray):
                 self.point = torch.Tensor(self.point)
+            if isinstance(self.state, np.ndarray):
+                self.state = torch.Tensor(self.state)
             if self.quantile is not None and isinstance(self.quantile[0], np.ndarray):
                 self.quantile = (torch.Tensor(self.quantile[0]), torch.Tensor(self.quantile[1]))
         else:
             if isinstance(self.point, torch.Tensor):
                 self.point = np.array(self.point)
+            if isinstance(self.state, torch.Tensor):
+                self.state = np.array(self.state)
             if self.quantile is not None and isinstance(self.quantile[0], torch.Tensor):
                 self.quantile = (np.array(self.quantile[0]), np.array(self.quantile[1]))
 
     def _slice_internal(self, start, end):
         return FcSingleModelPrediction(
             point=self.point[start:end] if self.point is not None else None,
-            quantile=(self.quantile[0][start:end], self.quantile[1][start:end]) if self.quantile is not None else None
+            quantile=(self.quantile[0][start:end], self.quantile[1][start:end]) if self.quantile is not None else None,
+            state=self.state[start:end] if self.state is not None else None
         )
 
 
@@ -131,6 +142,10 @@ class FcEnsembleModelPrediction(FCModelPrediction):
     @property
     def quantile_individual(self):
         return self._quantile, self._e_dim
+
+    @property
+    def states(self) -> Optional[Union[np.ndarray, torch.tensor]]:
+        return None
 
     @property
     def no_of_steps(self):
@@ -204,7 +219,10 @@ class ForcastModel(ABC, PersistenceModel):
                 assert callable(self.cached_fc)
                 self._cached_offset = offset
         else:
-            self._train(X=X, Y=Y, *args, **kwargs)
+            self._train(X=X, Y=Y, *args, **kwargs, train_offset=step_offset + Y.shape[0])
+
+    def train_global(self, datsets, alphas, trainer_config, experiment_config):
+        raise NotImplemented("Not Implemented!")
 
     def predict(self, pred_data: FCPredictionData, retrieve_tensor=True, **kwargs) -> FCModelPrediction:
         self._check_pred_data(pred_data)
@@ -238,6 +256,10 @@ class ForcastModel(ABC, PersistenceModel):
     @property
     def forcast_mode(self) -> ForcastMode:
         return self._forcast_mode
+
+    @property
+    def fc_state_dim(self):
+        return None
 
     @property
     def uses_past_for_prediction(self):

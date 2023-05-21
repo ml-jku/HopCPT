@@ -26,18 +26,21 @@ class EpsPredCtxLess(BaseModel, PIModel, CalibTrainerMixin):
 
     def _calibrate(self, calib_data: [PICalibData], alphas, **kwargs) -> [PICalibArtifacts]:
         Y_hat = []
+        fc_state_step = []
         calib_artifacts = []
         for c_data in calib_data:
-            Y_hat.append(self._forcast_service.predict(
+            c_result = self._forcast_service.predict(
                 FCPredictionData(ts_id=c_data.ts_id, X_past=c_data.X_pre_calib, Y_past=c_data.Y_pre_calib,
-                                 X_step=c_data.X_calib, step_offset=c_data.step_offset)).point)
+                                 X_step=c_data.X_calib, step_offset=c_data.step_offset))
+            Y_hat.append(c_result.point)
+            fc_state_step.append(c_result.state)
             eps = calc_residuals(Y=c_data.Y_calib, Y_hat=Y_hat[-1])  # [calib_size, *]
-            calib_artifacts.append(PICalibArtifacts(fc_Y_hat=Y_hat[-1], eps=eps))
+            calib_artifacts.append(PICalibArtifacts(fc_Y_hat=Y_hat[-1], eps=eps, fc_state_step=fc_state_step[-1]))
 
         trainer_config = kwargs['trainer_config']
         experiment_config = kwargs['experiment_config']
-        self._train_model(calib_data, Y_hat=Y_hat, alphas=alphas, experiment_config=experiment_config,
-                          trainer_config=trainer_config)
+        self._train_model(calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step, alphas=alphas,
+                          experiment_config=experiment_config, trainer_config=trainer_config)
         return calib_artifacts
 
     def calibrate_individual(self, calib_data: PICalibData, alpha, calib_artifact: Optional[PICalibArtifacts],

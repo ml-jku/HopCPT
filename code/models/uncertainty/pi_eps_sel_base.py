@@ -77,14 +77,17 @@ class EpsSelectionPIBase(PIModel, ConformalSelectionMixin, ABC):
         alpha, X_step, X_past, Y_past, eps_past = pred_data.alpha, pred_data.X_step, pred_data.X_past,\
                                                   pred_data.Y_past, pred_data.eps_past
         # Calculate y_hat and prediction interval for current step
-        Y_hat = self._forcast_service.predict(
+        fc_result = self._forcast_service.predict(
             FCPredictionData(ts_id=pred_data.ts_id, X_past=X_past, Y_past=Y_past, X_step=X_step,
-                             step_offset=pred_data.step_offset_overall)).point
+                             step_offset=pred_data.step_offset_overall))
+        Y_hat = fc_result.point
+        fc_state_step = fc_result.state
         current_ctx = self._calc_context(X_past=X_past[-self._past_window:],
                                          Y_past=Y_past[-self._past_window:],
                                          eps_past=eps_past[-self._past_window:] if eps_past is not None else None,
                                          X_step=X_step.squeeze(dim=0),
                                          Y_hat_step=Y_hat.squeeze(dim=0),
+                                         fc_state_step=fc_state_step.squeeze(dim=0) if fc_state_step is not None else None,
                                          ts_id=pred_data.ts_id,
                                          single_ctx=True)
         selected_eps = self._retrieve_epsilon(current_ctx)
@@ -103,18 +106,18 @@ class EpsSelectionPIBase(PIModel, ConformalSelectionMixin, ABC):
         """
         pass
 
-    def _calc_context(self, X_past, Y_past, eps_past, X_step, Y_hat_step, ts_id, single_ctx):
+    def _calc_context(self, X_past, Y_past, eps_past, X_step, Y_hat_step, ts_id, fc_state_step, single_ctx):
         """
         Calculate context for m or a single observations
         :return: [m: ctx_size] (m=1 for single_ctx == True)
         """
         if single_ctx:
             return self._ctx_gen.calc_single(X_past=X_past, Y_past=Y_past, eps_past=eps_past, X_step=X_step,
-                                             Y_hat_step=Y_hat_step,
+                                             Y_hat_step=Y_hat_step, fc_state_step=fc_state_step,
                                              ts_id_enc=torch.tensor([self._ctx_gen.get_ts_id_enc(ts_id)], dtype=torch.long))
         else:
             return self._ctx_gen.calc(X_past=X_past, Y_past=Y_past, eps_past=eps_past, X_step=X_step,
-                                      Y_hat_step=Y_hat_step,
+                                      Y_hat_step=Y_hat_step, fc_state_step=fc_state_step,
                                       ts_id_enc=torch.tensor([self._ctx_gen.get_ts_id_enc(ts_id)], dtype=torch.long))
 
     def _check_pred_data(self, pred_data: PIPredictionStepData):
@@ -164,9 +167,11 @@ class EpsSelectionPIStat(EpsSelectionPIBase):
     def calibrate_individual(self, calib_data: PICalibData, alpha, calib_artifact: Optional[PICalibArtifacts],
                              mix_calib_data: Optional[List[PICalibData]],
                              mix_calib_artifact: Optional[List[PICalibArtifacts]]) -> PICalibArtifacts:
-        Y_hat = self._forcast_service.predict(
+        c_result = self._forcast_service.predict(
             FCPredictionData(ts_id=calib_data.ts_id, X_past=calib_data.X_pre_calib, Y_past=calib_data.Y_pre_calib,
-                             X_step=calib_data.X_calib, step_offset=calib_data.step_offset)).point
+                             X_step=calib_data.X_calib, step_offset=calib_data.step_offset))
+        Y_hat = c_result.point
+        fc_state_step = c_result.state
         eps_calib = calc_residuals(Y_hat=Y_hat, Y=calib_data.Y_calib)
         calib_size = calib_data.Y_calib.shape[0]
         real_calib_offset = self._past_window if self._ctx_gen.use_eps_past else 0
@@ -178,6 +183,7 @@ class EpsSelectionPIStat(EpsSelectionPIBase):
                 eps_past=eps_calib[:calib_step][-self._past_window:] if self._ctx_gen.use_eps_past else None,
                 X_step=calib_data.X_calib[calib_step],
                 Y_hat_step=Y_hat[calib_step],
+                fc_state_step=fc_state_step[calib_step] if fc_state_step is not None else None,
                 ts_id=calib_data.ts_id,
                 single_ctx=True)
             if ctx_calib is None:

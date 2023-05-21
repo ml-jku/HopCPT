@@ -1,9 +1,7 @@
-import math
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Callable, Dict, Any
 
-import hydra
 import torch
 import wandb
 from torch import nn
@@ -31,6 +29,7 @@ class ModelInternalTrainer(BaseTrainer):
         self._experiment_config = experiment_config
         super().__init__(experiment_dir=experiment_config.experiment_dir,
                          gpu_id=experiment_config.gpu_id,
+                         seed=self._experiment_config.seed,
                          n_epochs=trainer_config.n_epochs,
                          val_every=trainer_config.val_every,
                          save_every=trainer_config.save_every,
@@ -66,7 +65,7 @@ class ModelInternalTrainer(BaseTrainer):
         LOGGER.info('Create optimizer and scheduler.')
         self._optimizer = self._trainer_config.optim(params=model.parameters())
         if self._trainer_config.lr_scheduler:
-            self._lr_scheduler = hydra.utils.instantiate(self._trainer_config.lr_scheduler, self._optimizer)
+            self._lr_scheduler = self._trainer_config.lr_scheduler(optimizer=self._optimizer)
 
     def _train_epoch(self, epoch: int) -> None:
         # setup logging
@@ -114,6 +113,8 @@ class ModelInternalTrainer(BaseTrainer):
         loss_vals = {key: torch.tensor(vals).mean().item() for key, vals in loss_log.items()}
 
         log_dict = {'last_train_step': self._train_step, **loss_vals, **metric_vals}
+        if self._lr_scheduler is not None:
+            log_dict['learning_rate'] = self._lr_scheduler.get_last_lr()[-1]
         wandb.log(dict(**{f"{_TRAIN_EP_PREFIX}{key}": val for key, val in log_dict.items()}, epoch=epoch))
         #LOGGER.info(f'Train epoch \n{pd.Series(convert_dict_to_python_types(log_dict), dtype=float)}')
         self._reset_metrics()

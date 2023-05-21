@@ -38,6 +38,7 @@ conf_eps_abs: False
 conf_sel_beta: 0
 mix_head_dist: True
 sample_alpha_inference: False  # Only possible for NOT per Head with absolute or residual loss mode
+conf_quantile_mode: sample  # cdf, sample, debug
 # Loss
 loss_mode: mse
 with_loss_weight: 0       # with residuals, absolute, mse

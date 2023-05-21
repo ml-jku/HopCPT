@@ -157,8 +157,8 @@ class CalibTrainerMixin:
     def _no_train_alpha_needed(self):
         return self._loss_mode in [LOSS_MODE_MIX, LOSS_MODE_MSE, LOSS_MODE_EPS_CDF]
 
-    def _train_model(self, calib_data: [PICalibData], Y_hat: List, alphas: List[float], experiment_config, trainer_config,
-                     history_size=None):
+    def _train_model(self, calib_data: [PICalibData], Y_hat: List, fc_state_step: List,
+                     alphas: List[float], experiment_config, trainer_config, history_size=None):
 
         metrics = MetricCollection(WinklerScore(coverage_values=alphas),
                                    MissCoverage(coverage_values=alphas),
@@ -166,7 +166,8 @@ class CalibTrainerMixin:
                                    PIWidth(coverage_values=alphas))
 
         if self._batch_mode == BATCH_MODE_ONE_TS:
-            data_loader = lambda: self.get_data_loader(calib_data=calib_data, Y_hat=Y_hat, alphas=alphas)
+            data_loader = lambda: self.get_data_loader(calib_data=calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step,
+                                                       alphas=alphas)
             map_to_model = lambda batch_data:\
                 dict(ctx_data=batch_data[0], Y=batch_data[1], Y_hat=batch_data[2], alpha=batch_data[3],
                      step_no=batch_data[4])
@@ -179,7 +180,8 @@ class CalibTrainerMixin:
                 (lambda model_out, batch_data: dict(Y=batch_data[1],  **model_out))
         else:
             data_loader = lambda:\
-                self.get_data_loader_naive_mix(calib_data=calib_data, Y_hat=Y_hat, alphas=alphas, history_size=history_size)
+                self.get_data_loader_naive_mix(calib_data=calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step,
+                                               alphas=alphas, history_size=history_size)
             map_to_model = lambda batch_data:\
                 dict(ctx_data=batch_data[0], Y=batch_data[1], Y_hat=batch_data[2], alpha=batch_data[3],
                      step_no=batch_data[4], ts_id=batch_data[5], real_hist_size=batch_data[6], ctx_hist=batch_data[7],
@@ -208,17 +210,19 @@ class CalibTrainerMixin:
         trainer.train()
 
     @abstractmethod
-    def _get_calib_ctx(self, calib_data: PICalibData, Y_hat) -> Tuple[torch.tensor, int, int]:
+    def _get_calib_ctx(self, calib_data: PICalibData, Y_hat, fc_state_step=None) -> Tuple[torch.tensor, int, int]:
         """
         :return: context of calib data, window_offset, ts_id_enc
         """
         pass
 
-    def get_data_loader(self, calib_data: [PICalibData], Y_hat: List, alphas: List[float]):
+    def get_data_loader(self, calib_data: [PICalibData], Y_hat: List, fc_state_step: List,
+                        alphas: List[float]):
         splits = [], []
         for idx, c_data in enumerate(calib_data):
             # Prepare Context
-            ctx_data, window_offset, ts_id_enc = self._get_calib_ctx(calib_data=c_data, Y_hat=Y_hat[idx])
+            ctx_data, window_offset, ts_id_enc = self._get_calib_ctx(calib_data=c_data, Y_hat=Y_hat[idx],
+                                                                     fc_state_step=fc_state_step[idx])
             step_no = torch.arange(start=c_data.step_offset, end=c_data.step_offset + c_data.Y_calib.shape[0],
                                    dtype=torch.long)
             # Split in Train/Val
@@ -259,12 +263,14 @@ class CalibTrainerMixin:
                DataLoader(EpsSelTrainerDataset(*zip(*splits[1])), batch_size=self._batch_size, shuffle=True,
                           collate_fn=PadCollate())
 
-    def get_data_loader_naive_mix(self, calib_data: [PICalibData], Y_hat: List, alphas: List[float], history_size):
+    def get_data_loader_naive_mix(self, calib_data: [PICalibData], Y_hat: List, fc_state_step: List,
+                                  alphas: List[float], history_size):
         splits = [], []
 
         for idx, c_data in enumerate(calib_data):
             # Prepare Context
-            ctx_data, window_offset, ts_id_enc = self._get_calib_ctx(calib_data=c_data, Y_hat=Y_hat[idx])
+            ctx_data, window_offset, ts_id_enc = self._get_calib_ctx(calib_data=c_data, Y_hat=Y_hat[idx],
+                                                                     fc_state_step=fc_state_step[idx])
             step_no = torch.arange(start=c_data.step_offset, end=c_data.step_offset + c_data.Y_calib.shape[0],
                                    dtype=torch.long)
             # Split in Train/Val
@@ -342,8 +348,9 @@ class EpsCtxMemoryMixin:
     def _fill_memory(self, calib_data: PICalibData, calib_artifacts: PICalibArtifacts,
                      mix_calib_data: List[PICalibData] = None, mix_calib_artifacts: List[PICalibArtifacts] = None):
         self._memory.clear()
-        ctx_encoded, eps, step_no, history_state = self._encode_calib_data(calib_data, calib_artifacts.fc_Y_hat,
-                                                                           calib_artifacts)
+        ctx_encoded, eps, step_no, history_state = self._encode_calib_data(
+            c_data=calib_data, Y_hat=calib_artifacts.fc_Y_hat,
+            fc_state_step=calib_artifacts.fc_state_step, calib_artifacts=calib_artifacts)
         eps = eps.to(self._current_device)
         if self._keep_calib_eps:
             self._memory.add_freezed(ctx_encoded, eps, step_no=step_no)
@@ -359,8 +366,9 @@ class EpsCtxMemoryMixin:
             extra_ctx_history_states = []  # state for the optional history compression
             for idx, c_data in enumerate(mix_calib_data):
                 self._mix_mem_dict[c_data.ts_id] = len(self._mix_mem_dict)
-                ctx_encoded, eps, step_no, h_state = self._encode_calib_data(c_data, mix_calib_artifacts[idx].fc_Y_hat,
-                                                                             mix_calib_artifacts[idx])
+                ctx_encoded, eps, step_no, h_state = self._encode_calib_data(
+                    c_data=c_data, Y_hat=mix_calib_artifacts[idx].fc_Y_hat,
+                    fc_state_step=calib_artifacts.fc_state_step, calib_artifacts=mix_calib_artifacts[idx])
                 extra_ctx_history_states.append(h_state)
                 eps = eps.to(self._current_device)
                 if self._keep_calib_eps:
@@ -383,13 +391,14 @@ class EpsCtxMemoryMixin:
 
         return history_state, extra_ctx_history_states
 
-    def _encode_calib_data(self, c_data: PICalibData, Y_hat, calib_artifacts: PICalibArtifacts):
+    def _encode_calib_data(self, c_data: PICalibData, Y_hat, fc_state_step, calib_artifacts: PICalibArtifacts):
         if self._store_step_no:
             step_no = torch.arange(start=c_data.step_offset, end=c_data.step_offset + c_data.Y_calib.shape[0],
                                    dtype=torch.long, device=self._current_device)
         else:
             step_no = None
-        ctx_data, window_offset, ts_id_enc = self._get_calib_ctx(calib_data=c_data, Y_hat=Y_hat)  # [calib_size, ctx_size]
+        ctx_data, window_offset, ts_id_enc = self._get_calib_ctx(calib_data=c_data, Y_hat=Y_hat,
+                                                                 fc_state_step=fc_state_step)  # [calib_size, ctx_size]
         ctx_encoded, ctx_history_state = self._encode_ctx(context=ctx_data.to(self._current_device),
                                                           step_no=step_no)  # [calib_size, ctx_emb_size]
         eps = calc_residuals(Y=c_data.Y_calib, Y_hat=Y_hat)  # [calib_size, *]
@@ -448,7 +457,7 @@ class EpsCtxMemoryMixin:
         pass
 
     @abstractmethod
-    def _get_calib_ctx(self, calib_data, Y_hat) -> Tuple[torch.tensor, int, int]:
+    def _get_calib_ctx(self, calib_data, Y_hat, fc_state_step=None) -> Tuple[torch.tensor, int, int]:
         """
         :return: context of calib data, window_offset
         """

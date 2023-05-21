@@ -22,10 +22,19 @@ class EnbPIModel(PIModel):
         self._adaptive_sigma = kwargs['adaptive_sigma']
         self._past_window_len = kwargs['past_window_len']
         self._beta_calc_bins = kwargs.get('beta_calc_bins', 20)
+        self._use_adaptiveci = kwargs.get('use_adaptiveci', False)
+        if self._use_adaptiveci:
+            self._gamma = kwargs['gamma']
+        self._alpha_t = None
+
+
+    def pre_predict(self, **kwargs):
+        super().pre_predict(**kwargs)
+        self._alpha_t = kwargs['alpha']  # Reset
 
     def _predict_step(self, pred_data: PIPredictionStepData, **kwargs) -> PIModelPrediction:
         # Retrieve data
-        alpha, X_step, X_past, Y_past, eps_past = pred_data.alpha, pred_data.X_step, pred_data.X_past, \
+        _, X_step, X_past, Y_past, eps_past = pred_data.alpha, pred_data.X_step, pred_data.X_past, \
                                                   pred_data.Y_past, pred_data.eps_past[-self._past_window_len:]
         if self._adaptive_sigma:
             raise NotImplemented("Not implemented yet!")
@@ -36,9 +45,9 @@ class EnbPIModel(PIModel):
             FCPredictionData(ts_id=pred_data.ts_id, X_past=X_past, Y_past=Y_past, X_step=X_step,
                              step_offset=pred_data.step_offset_overall)).point
         # Get current beta (and sigma)
-        beta = self._get_beta_bins(eps_past, alpha)
+        beta = self._get_beta_bins(eps_past, self._alpha_t)
         width_low = curr_sigma * np.percentile(eps_past, math.ceil(100 * beta))
-        width_high = curr_sigma * np.percentile(eps_past, math.ceil(100 * (1 - alpha + beta)))
+        width_high = curr_sigma * np.percentile(eps_past, math.ceil(100 * (1 - self._alpha_t + beta)))
         pred_int = Y_hat + width_low, Y_hat + width_high
         return PIModelPrediction(pred_interval=pred_int, fc_Y_hat=Y_hat)
 
@@ -51,6 +60,16 @@ class EnbPIModel(PIModel):
                        np.percentile(eps, math.ceil(100 * beta_ls[i]))
         i_star = np.argmin(width)
         return beta_ls[i_star]
+
+    def _post_predict_step(self, Y_step, pred_result: PIModelPrediction, pred_data: PIPredictionStepData, **kwargs):
+        # If Adaptive:
+        if self._use_adaptiveci:
+            alpha = pred_data.alpha
+            pred_int = pred_result.pred_interval
+            err_step = 0 if pred_int[0] <= Y_step <= pred_int[1] else 1
+            # Simple Mode
+            self._alpha_t = self._alpha_t + self._gamma * (alpha - err_step)
+            self._alpha_t = max(0, min(1, self._alpha_t))  # Make sure it is between 0 and 1
 
     def model_ready(self):
         return True
@@ -81,6 +100,10 @@ class SPICModel(PIModel):
         self._use_xt_for_regressor = kwargs['use_xt']
         self._beta_calc_bins = kwargs.get('beta_calc_bins', 5)
         self._regressor_param = kwargs.get('regressor_param', dict())
+        self._use_adaptiveci = kwargs.get('use_adaptiveci', False)
+        if self._use_adaptiveci:
+            self._gamma = kwargs['gamma']
+        self._alpha_t = None
         self.model = None
 
     def _calibrate(self, calib_data: [PICalibData], alphas, **kwargs) -> [PICalibArtifacts]:
@@ -93,9 +116,13 @@ class SPICModel(PIModel):
                                          X_reg_train=calib_data.X_calib, Y_reg_train=calib_data.Y_calib,
                                          alpha=alpha, step_offset=calib_data.step_offset)
 
+    def pre_predict(self, **kwargs):
+        super().pre_predict(**kwargs)
+        self._alpha_t = kwargs['alpha']  # Reset
+
     def _predict_step(self, pred_data: PIPredictionStepData, **kwargs) -> PIModelPrediction:
         # Retrieve data
-        alpha, X_step, X_past, Y_past, eps_past = pred_data.alpha, pred_data.X_step, pred_data.X_past, \
+        _, X_step, X_past, Y_past, eps_past = pred_data.alpha, pred_data.X_step, pred_data.X_past, \
                                                   pred_data.Y_past, pred_data.eps_past[-self._past_window_len:]
 
         if self._retrain_regressor:
@@ -112,7 +139,7 @@ class SPICModel(PIModel):
             X_reg = np.array(eps_past).reshape(1, -1)
         #beta = self._get_beta_bins(X_reg, alpha)
         #print(f"Beta: {beta}")
-        _, widths = self.model.predict(X_reg, alpha)
+        _, widths = self.model.predict(X_reg, self._alpha_t)
         width_low = widths[0][0]
         width_high = widths[0][1]
         #width_low = self._curr_SigmaX * self.model.predict(X_reg, beta)[1][0][0]
@@ -159,6 +186,16 @@ class SPICModel(PIModel):
                        - self.model.predict(X_reg, beta_ls[i])[1][0][1]
         i_star = np.argmin(width)
         return beta_ls[i_star]
+
+    def _post_predict_step(self, Y_step, pred_result: PIModelPrediction, pred_data: PIPredictionStepData, **kwargs):
+        # If Adaptive:
+        if self._use_adaptiveci:
+            alpha = pred_data.alpha
+            pred_int = pred_result.pred_interval
+            err_step = 0 if pred_int[0] <= Y_step <= pred_int[1] else 1
+            # Simple Mode
+            self._alpha_t = self._alpha_t + self._gamma * (alpha - err_step)
+            self._alpha_t = max(0, min(1, self._alpha_t))  # Make sure it is between 0 and 1
 
     def model_ready(self):
         return self.model is not None

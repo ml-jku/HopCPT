@@ -189,7 +189,7 @@ def schedule_runs(experiment_configs: List[DictConfig],
             )
 
             counter += 1
-            time.sleep(2)
+            time.sleep(0.2)
 
         # check for completed runs
         for key, process in running_processes.items():
