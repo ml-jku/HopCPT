@@ -98,7 +98,7 @@ For the LSTM model you need to train an LSTM first - and save its predictions.
 The prediction output and the  last saved (=best) model need to bout inside the a folder `models_save/lstm_fc` in the `absolute_project_root_dir`. The prediciction file must be named `predicitons.pt` the model file `model`.
 
 ```sh
-python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=trainsweep_solar3Y''config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'model_fc.model_params.lstm_conf.hidden_size=256' 'model_fc.model_params.dropout=0.25' 'model_fc.model_params.batch_size=512' 'trainer.trainer_config.optim.lr=0.0001'
+python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=nsdb2018-20_60m' 'config.experiment_data.experiment_name=trainsweep_solar3Y''config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'config.model_fc.model_params.lstm_conf.hidden_size=256' 'config.model_fc.model_params.dropout=0.25' 'config.model_fc.model_params.batch_size=512' 'config.trainer.trainer_config.optim.lr=0.0001'
 ```
 
 ```sh
@@ -188,7 +188,7 @@ python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=conf_default'
 
 Train LSTM Model (details see above)
 ```sh
-python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=trainsweep_air10' 'config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'model_fc.model_params.lstm_conf.hidden_size=256' 'model_fc.model_params.dropout=0.1' 'model_fc.model_params.batch_size=512' 'trainer.trainer_config.optim.lr=0.0001'
+python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm10' 'config.experiment_data.experiment_name=trainsweep_air10' 'config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'config.model_fc.model_params.lstm_conf.hidden_size=256' 'config.model_fc.model_params.dropout=0.1' 'config.model_fc.model_params.batch_size=512' 'config.trainer.trainer_config.optim.lr=0.0001'
 ```
 
 ```sh
@@ -275,7 +275,7 @@ python code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=conf_default' '
 
 Train LSTM Model (details see above)
 ```sh
-python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=trainsweep_sapflux''config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'model_fc.model_params.lstm_conf.hidden_size=256' 'model_fc.model_params.dropout=0' 'model_fc.model_params.batch_size=256' 'trainer.trainer_config.optim.lr=0.001'
+python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=sapflux_solo3_large' 'config.experiment_data.experiment_name=trainsweep_sapflux''config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'config.model_fc.model_params.lstm_conf.hidden_size=256' 'config.model_fc.model_params.dropout=0' 'config.model_fc.model_params.batch_size=256' 'config.trainer.trainer_config.optim.lr=0.001'
 ```
 
 ```sh
@@ -389,7 +389,7 @@ python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=conf_default'
 
 Train LSTM Model (details see above)
 ```sh
-python ./code/run_sweep_lstm_train.py 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=trainsweep_solar1Y' 'config.model_fc.model_params.plot_eval_after_train=false''config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'  'model_fc.model_params.lstm_conf.hidden_size=64' 'model_fc.model_params.dropout=0.25' 'model_fc.model_params.batch_size=256' 'trainer.trainer_config.optim.lr=0.001'
+python ./code/run_sweep_lstm_train.py 'config/task=default_1year_gn' 'config/dataset=nsdb2019_60m' 'config.experiment_data.experiment_name=trainsweep_solar1Y' 'config.model_fc.model_params.plot_eval_after_train=false''config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>'  'config.model_fc.model_params.lstm_conf.hidden_size=64' 'config.model_fc.model_params.dropout=0.25' 'config.model_fc.model_params.batch_size=256' 'config.trainer.trainer_config.optim.lr=0.001'
 ```
 
 ```sh
@@ -536,7 +536,7 @@ python ./code/main.py 'config/model_fc=reg_ridge' 'config/model_uc=conf_default'
 
 Train LSTM Model (details see above)
 ```sh
-python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=trainsweep_air25' 'config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'model_fc.model_params.lstm_conf.hidden_size=64' 'model_fc.model_params.dropout=0.1' 'model_fc.model_params.batch_size=512' 'trainer.trainer_config.optim.lr=0.001'
+python ./code/run_sweep_lstm_train.py 'config/task=default_3year_gn' 'config/dataset=bejing_air_pm25' 'config.experiment_data.experiment_name=trainsweep_air25' 'config.model_fc.model_params.plot_eval_after_train=false' 'config.trainer.trainer_config.n_epochs=150' 'config.experiment_data.base_proj_dir=<absolute_project_root_dir>' 'config.model_fc.model_params.lstm_conf.hidden_size=64' 'config.model_fc.model_params.dropout=0.1' 'config.model_fc.model_params.batch_size=512' 'config.trainer.trainer_config.optim.lr=0.001'
 ```
 
 ```sh
