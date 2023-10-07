@@ -180,6 +180,7 @@ class FCPredictionData:
     X_step: Optional[torch.Tensor] = None
     alpha: Optional[float] = None
     _no_fc_steps: Optional[int] = None
+    step_rel: int = None
 
     @property
     def no_fc_steps(self):

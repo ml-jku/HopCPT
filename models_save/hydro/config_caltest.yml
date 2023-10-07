@@ -1,0 +1,104 @@
+batch_size: 256
+cache_validation_data: true
+clip_gradient_norm: 1
+clip_targets_to_zero:
+- QObs(mm/d)
+commit_hash:
+data_dir: data/hydrology/CAMELS_US
+dataset: camels_us
+device: cuda:3
+dynamic_inputs:
+- PRCP(mm/day)_nldas_extended
+- SRAD(W/m2)_nldas_extended
+- Tmax(C)_nldas_extended
+- Tmin(C)_nldas_extended
+- Vp(Pa)_nldas_extended
+- prcp(mm/day)_maurer_extended
+- srad(W/m2)_maurer_extended
+- tmax(C)_maurer_extended
+- tmin(C)_maurer_extended
+- vp(Pa)_maurer_extended
+- prcp(mm/day)_daymet
+- srad(W/m2)_daymet
+- tmax(C)_daymet
+- tmin(C)_daymet
+- vp(Pa)_daymet
+epochs: 30
+experiment_name: regression_camels_9y_seed10
+forcings:
+- maurer_extended
+- daymet
+- nldas_extended
+head: regression
+hidden_size: 256
+img_log_dir: outputs/neuralhydrology/regression_camels_9y_seed10_1601_092104/img_log
+initial_forget_bias: 3
+learning_rate:
+  0: 0.001
+  10: 0.0005
+  25: 0.0001
+log_interval: 5
+log_n_figures: 4
+log_tensorboard: true
+loss: nse
+metrics:
+- NSE
+- KGE
+- MSE
+model: cudalstm
+num_workers: 16
+number_of_basins: 531
+optimizer: Adam
+output_activation: linear
+output_dropout: 0.4
+package_version: 1.4.0
+predict_last_n: 1
+run_dir: outputs/neuralhydrology/regression_camels_9y_seed10_1601_092104
+save_train_data: false
+save_validation_results: false
+save_weights_every: 3
+seed: 10
+seq_length: 365
+static_attributes:
+- elev_mean
+- slope_mean
+- area_gages2
+- frac_forest
+- lai_max
+- lai_diff
+- gvf_max
+- gvf_diff
+- soil_depth_pelletier
+- soil_depth_statsgo
+- soil_porosity
+- soil_conductivity
+- max_water_content
+- sand_frac
+- silt_frac
+- clay_frac
+- carbonate_rocks_frac
+- geol_permeability
+- p_mean
+- pet_mean
+- aridity
+- frac_snow
+- high_prec_freq
+- high_prec_dur
+- low_prec_freq
+- low_prec_dur
+target_noise_std: 0
+target_variables:
+- QObs(mm/d)
+test_basin_file: data/hydrology/531_basin_list.txt
+test_end_date: 30/09/1999
+test_start_date: 01/10/1990
+train_basin_file: data/hydrology/531_basin_list.txt
+train_dir: outputs/neuralhydrology/regression_camels_9y_seed10_1601_092104/train_data
+train_end_date: 30/09/1990
+train_start_date: 01/10/1981
+use_basin_id_encoding: false
+validate_every: 999
+validate_n_random_basins: 99999999
+validation_basin_file: data/hydrology/531_basin_list.txt
+validation_end_date: []
+validation_start_date: []

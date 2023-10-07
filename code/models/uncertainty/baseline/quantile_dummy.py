@@ -7,8 +7,7 @@ class QuantileDummy(PIModel):
     Dummy model which directly uses quantiles from FC model
     """
     def __init__(self, **kwargs) -> None:
-        PIModel.__init__(self, use_dedicated_calibration=True, fc_prediction_out_modes=(PredictionOutputType.QUANTILE,),
-                         ts_ids=kwargs["ts_ids"])
+        PIModel.__init__(self, use_dedicated_calibration=True, fc_prediction_out_modes=(PredictionOutputType.QUANTILE,))
 
     def _calibrate(self, calib_data: [PICalibData], alphas, **kwargs) -> [PICalibArtifacts]:
         pass

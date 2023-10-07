@@ -3,8 +3,9 @@ ctx_mode: uni_past_multi_step_and_yhat
 sim_mode: knn
 keep_calib_eps: false
 eps_mem_size: 300
-past_window: 50
+past_window: 1
 no_of_beta_bins: 1
-retrieve_mode: ktop
-topk_used_share: null # Only allowed to set for ktop retrieval
+retrieve_mode: topk
+topk_used_share: 0.3 # Only allowed to set for ktop retrieval
 topk_adaptive: null # Only allowed to set for ktop retrieval
+online_memory: true

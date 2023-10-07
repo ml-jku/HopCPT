@@ -8,6 +8,34 @@ from models.forcast.forcast_base import ForcastMode, ForcastModel, PredictionOut
     FCPredictionData, FcSingleModelPrediction
 
 
+class DummyForcast(ForcastModel):
+    """
+    Always return 0
+    """
+    def __init__(self, **kwargs):
+        super().__init__(forcast_mode=ForcastMode.ALL_ON_TRAIN, supported_outputs=(PredictionOutputType.POINT,))
+        self.value = 0
+
+    def _train(self, X, Y, precalc_fc_steps=None, *args, **kwargs) -> Optional[Tuple[FCModelPrediction, Optional[int]]]:
+        if precalc_fc_steps is not None:
+            return FcSingleModelPrediction(point=np.repeat(self.value, precalc_fc_steps)[..., None]), None
+        return None
+
+    def _predict(self, pred_data: FCPredictionData, *args, **kwargs) -> FCModelPrediction:
+        return FcSingleModelPrediction(point=np.repeat(self.value, pred_data.no_fc_steps))
+
+    def can_handle_different_alpha(self):
+        return True
+
+    @property
+    def train_per_time_series(self):
+        return True
+
+    @property
+    def uses_past_for_prediction(self):
+        return False
+
+
 class AverageForcast(ForcastModel):
     """
     Model which only predicts the average value of the training as constant forcast

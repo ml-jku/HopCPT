@@ -5,7 +5,7 @@ from typing import Tuple, Optional, List
 import numpy as np
 import torch
 
-from utils.calc_torch import calc_residuals
+from models.uncertainty.score_service import score
 from models.forcast.forcast_base import PredictionOutputType, FCPredictionData
 from models.uncertainty.components.eps_ctx_gen import EpsilonContextGen
 from models.uncertainty.components.eps_memory import FiFoMemory
@@ -64,7 +64,7 @@ class EpsSelectionPIBase(PIModel, ConformalSelectionMixin, ABC):
     """
     def __init__(self, use_dedicated_calibration: bool, fc_prediction_out_modes: Tuple[PredictionOutputType],
                  ctx_mode: str, past_window: int, no_of_beta_bins: int, ts_ids):
-        PIModel.__init__(self, use_dedicated_calibration, fc_prediction_out_modes, ts_ids=ts_ids)
+        PIModel.__init__(self, use_dedicated_calibration, fc_prediction_out_modes)
         ConformalSelectionMixin.__init__(self)
         self._ctx_gen = EpsilonContextGen(mode=ctx_mode, ts_ids=ts_ids)
         self._past_window = past_window
@@ -92,7 +92,8 @@ class EpsSelectionPIBase(PIModel, ConformalSelectionMixin, ABC):
                                          single_ctx=True)
         selected_eps = self._retrieve_epsilon(current_ctx)
         q_conformal_low, q_conformal_high, _ = self._calc_conformal_quantiles(selected_eps, alpha, self._no_beta_bins)
-        pred_int = Y_hat + q_conformal_low, Y_hat + q_conformal_high
+        pred_int = Y_hat + score.resolve(q_conformal_low, **pred_data.score_param),\
+            Y_hat + score.resolve(q_conformal_high, **pred_data.score_param)
         prediction_result = PIModelPrediction(pred_interval=pred_int, fc_Y_hat=Y_hat)
         prediction_result.eps_ctx = current_ctx
         return prediction_result
@@ -153,6 +154,7 @@ class EpsSelectionPIStat(EpsSelectionPIBase):
         self._topk_adaptive = kwargs['topk_adaptive']
         self._topk_used_share = kwargs['topk_used_share']
         self._topk_share_adaptive = None
+        self._online_memory = kwargs['online_memory']
 
         # Throw assert to make sweep runs more efficent
         if self._retrieve_mode == 'sample':
@@ -172,7 +174,7 @@ class EpsSelectionPIStat(EpsSelectionPIBase):
                              X_step=calib_data.X_calib, step_offset=calib_data.step_offset))
         Y_hat = c_result.point
         fc_state_step = c_result.state
-        eps_calib = calc_residuals(Y_hat=Y_hat, Y=calib_data.Y_calib)
+        eps_calib = score.get(Y_hat=Y_hat, Y=calib_data.Y_calib, **calib_data.score_param)
         calib_size = calib_data.Y_calib.shape[0]
         real_calib_offset = self._past_window if self._ctx_gen.use_eps_past else 0
         ctx_calib = None
@@ -201,8 +203,9 @@ class EpsSelectionPIStat(EpsSelectionPIBase):
         self._topk_share_adaptive = self._topk_used_share  # Reset
 
     def _post_predict_step(self, Y_step, pred_result: PIModelPrediction, pred_data: PIPredictionStepData, **kwargs):
-        step_eps = calc_residuals(Y_hat=pred_result.fc_Y_hat, Y=Y_step)
-        self._eps_memory.add_transient(pred_result.eps_ctx, step_eps.reshape(1, -1))
+        if self._online_memory:
+            step_eps = score.get(Y_hat=pred_result.fc_Y_hat, Y=Y_step, **pred_data.score_param)
+            self._eps_memory.add_transient(pred_result.eps_ctx, step_eps.reshape(1, -1))
         if self._retrieve_mode == 'topk' and self._topk_adaptive is not None:
             pred_int = pred_result.pred_interval
             err_step = -1 if pred_int[0] <= Y_step <= pred_int[1] else 1

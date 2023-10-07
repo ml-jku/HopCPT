@@ -18,7 +18,7 @@ hydra:
 run_config:
   exec_type: parallel # sequential
   gpu_ids: [0]
-  runs_per_gpu: 1 # Only relevant for parallel execution
+  runs_per_gpu: 1    # Only relevant for parallel execution
   seeds:
     - 10
     - 20
@@ -40,9 +40,12 @@ run_config:
 sweep:
   type: grid
   axes:
-#    - parameter: model_fc.model_params.pre_trained_model_path
-#      vals:
-#        - null
+    - parameter: model_fc.model_params.pre_trained_model_path
+      vals:
+        - null
+    - parameter: model_fc.model_params.pre_trained_predictions_paths
+      vals:
+        - null
     - parameter: evaluation.pred_vega
       vals:
         - False

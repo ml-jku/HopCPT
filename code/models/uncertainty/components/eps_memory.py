@@ -183,3 +183,6 @@ class FiFoMemory(EpsMemory):
         first_step = self._current_transient_step % self._mem_steps
         indices = torch.cat((torch.arange(first_step, self._mem_steps), torch.arange(0, first_step)))
         return indices
+
+    def __len__(self):
+        return self._fill_len

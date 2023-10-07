@@ -29,6 +29,10 @@ class RunHandler(object):
             self._run_sequential()
         elif run_config.exec_type == 'parallel':
             self._run_parallel()
+        elif run_config.exec_type == 'only-config':
+            self.__run(gpu_ids=self.config.run_config.gpu_ids, runs_per_gpu=self.config.run_config.runs_per_gpu,
+                       only_config=True)
+
 
     def _run_sequential(self):
         """Run experiments on the (first) gpu_id sequentially."""
@@ -46,7 +50,7 @@ class RunHandler(object):
         """Run experiments in parallel."""
         self.__run(gpu_ids=self.config.run_config.gpu_ids, runs_per_gpu=self.config.run_config.runs_per_gpu)
 
-    def __run(self, runs_per_gpu: int, gpu_ids: Optional[Union[int, List[int]]] = None, ):
+    def __run(self, runs_per_gpu: int, gpu_ids: Optional[Union[int, List[int]]] = None, only_config=False):
         """Run experiments in separate processes."""
         # get seeds
         seeds = self.config.run_config.seeds
@@ -80,13 +84,17 @@ class RunHandler(object):
                         skipped += 1
                         continue
                     current_config = copy.deepcopy(cfg)
-                    current_config[EXPERIMENT_CONFIG].trainer.trainer_config.init_model = init_model
+                    if init_model is not None:  # Do not overwrite init model when not specified
+                        current_config[EXPERIMENT_CONFIG].trainer.trainer_config.init_model = init_model
                     current_config[EXPERIMENT_CONFIG].experiment_data.seed = seed
                     experiment_configs.append(current_config)
         if skipped != len(skip_list):
             raise ValueError("Number of skipped configs specified and actually skipped mismatch! Check run config!")
 
-        schedule_runs(experiment_configs, self.script_path, gpu_ids=gpu_ids, runs_per_gpu=runs_per_gpu)
+        if only_config:
+            create_slurm_call(experiment_configs, self.script_path, gpu_ids=gpu_ids, runs_per_gpu=runs_per_gpu)
+        else:
+            schedule_runs(experiment_configs, self.script_path, gpu_ids=gpu_ids, runs_per_gpu=runs_per_gpu)
 
     def _extract_sweep(self, config: DictConfig) -> List[DictConfig]:
         if OmegaConf.is_missing(config, 'sweep'):
@@ -106,7 +114,7 @@ class RunHandler(object):
 
 ## FUNCTIONS:
 
-def update_and_save_config(config: DictConfig, gpu_id: int, count: int) -> str:
+def update_and_save_config(config: DictConfig, gpu_id: int, count: int, add_seed_to_name=True) -> str:
     """Updates the config-file with seed and gpu_id, saves it in the current working directory and returns its name.
 
     Args:
@@ -119,7 +127,7 @@ def update_and_save_config(config: DictConfig, gpu_id: int, count: int) -> str:
     """
     # save seed in config
     seed = config[EXPERIMENT_CONFIG].experiment_data.seed
-    exp_name = config[EXPERIMENT_CONFIG].experiment_data.experiment_name + f"-seed{seed}-c{count}"
+    exp_name = config[EXPERIMENT_CONFIG].experiment_data.experiment_name + (f"-seed{seed}-c{count}" if add_seed_to_name else f"-c{count}")
     config[EXPERIMENT_CONFIG].experiment_data.experiment_name = exp_name  # !< config is modified here
     # set device
     config[EXPERIMENT_CONFIG].experiment_data.gpu_id = gpu_id  # !< config is modified here
@@ -127,6 +135,29 @@ def update_and_save_config(config: DictConfig, gpu_id: int, count: int) -> str:
     OmegaConf.save(config, Path.cwd() / save_name)
     return save_name
 
+
+def create_slurm_call(experiment_configs: List[DictConfig],
+                      script_path: str,
+                      runs_per_gpu: int,
+                      gpu_ids: Optional[Union[int, List[int]]] = None):
+
+    assert len(experiment_configs) > 0, f"No experiments to schedule given."
+    if gpu_ids is None:
+        gpu_ids = [-1]
+    elif isinstance(gpu_ids, int):
+        gpu_ids = [gpu_ids]
+
+    logging.info(f"Create Sweep Slum Calls with {len(experiment_configs)} runs on devices '{gpu_ids}'"
+                 f" with {runs_per_gpu} parallel runs per device!")
+
+    for idx, config in enumerate(experiment_configs):
+        current_config = copy.deepcopy(config)
+        config_name = update_and_save_config(config=current_config, gpu_id=gpu_ids[idx % len(gpu_ids)], count=idx,
+                                             add_seed_to_name=False)
+
+        # start run via subprocess call
+        run_command = f'python {script_path} --config-path {str(Path.cwd())} --config-name {config_name}'
+        logging.info(f"\n{run_command}\n")
 
 def schedule_runs(experiment_configs: List[DictConfig],
                   script_path: str,

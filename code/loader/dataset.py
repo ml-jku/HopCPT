@@ -1,8 +1,7 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing import Optional, Tuple
 
 import torch
-from torch.ao.quantization import ABC
 
 
 class TsDataset(ABC):
@@ -139,6 +138,10 @@ class ChronoSplittedTsDataset(TsDataset):
     @property
     def Y_normalize_props(self) -> Tuple[float, float]:
         return self._Y_means, self._Y_stds
+
+    @property
+    def Y_std(self):
+        return torch.std(self.Y_train)
 
     @property
     def ts_id(self):
@@ -328,9 +331,11 @@ class SimpleTsDataset:
 class HydroDataset(ChronoSplittedTsDataset):
     """Dataset for the hydrology application."""
     def __init__(self, ts_id: str, X, Y, test_step: int, static_attribute_indices: list[int],
+                 static_attribute_norm_param,
                  calib_step: Optional[int] = None, normalize=True):
 
         self._static_attribute_indices = static_attribute_indices
+        self._static_attribute_norm_param = static_attribute_norm_param
         # If there are no static attributes, we can use the default normalization from super.
         default_normalization = normalize and not static_attribute_indices
         super().__init__(ts_id, X, Y, test_step, calib_step, normalize=default_normalization)
@@ -341,7 +346,11 @@ class HydroDataset(ChronoSplittedTsDataset):
 
     @property
     def X_normalize_props(self) -> Tuple[float, float]:
-        raise ValueError('Do not use for hydrology data because of static attributes.')
+        return self._X_means, self._X_stds
+
+    @property
+    def static_normalize_props(self):
+        return self._static_attribute_norm_param
 
     def global_normalize(self, X_mean, X_std, Y_mean, Y_std):        
         self._Y = (self._Y - Y_mean) / Y_std

@@ -12,6 +12,7 @@ from torchmetrics import MetricCollection
 from models.uncertainty.components.data_mixing import SubGroupMixSampler
 from models.uncertainty.components.eps_memory import FiFoMemory
 from models.uncertainty.pi_base import PICalibData, PICalibArtifacts
+from models.uncertainty.score_service import score
 from utils.calc_torch import calc_residuals, unfold_window
 from utils.loss import pinball_loss, width_loss, coverage_loss, chung_calib_loss, mse_loss
 from utils.metrics import WinklerScore, MissCoverage, PIWidth, DummyMetric, CoverageDiff
@@ -24,9 +25,11 @@ class EpsSelTrainerDataset(Dataset):
     def __init__(self, eps_context: List[torch.Tensor], Y: List[torch.Tensor], Y_hat: List[torch.Tensor],
                  alpha: List[float], step_no: List[torch.Tensor],
                  ts_id: Optional[List[str]] = None,
+                 score_param=None,
                  real_history_size: Optional[List[int]] = None,
                  add_history_ctx: Optional[List[torch.Tensor]] = None,
-                 add_history_step_no: Optional[List[torch.Tensor]] = None):
+                 add_history_step_no: Optional[List[torch.Tensor]] = None,
+                 has_history=True):
         super().__init__()
         assert len(eps_context) == len(Y) == len(Y_hat) == len(step_no) == len(alpha)
         self._eps_context = eps_context
@@ -34,18 +37,20 @@ class EpsSelTrainerDataset(Dataset):
         self._Y_hat = Y_hat
         self._step_no = step_no
         self._alpha = alpha
-        if add_history_ctx is not None:
+        self._ts_id = ts_id
+        if has_history:
             self._has_history = True
-            self._ts_id = ts_id
             self._real_history_size = real_history_size
             self._add_history_ctx = add_history_ctx
             self._add_history_step_no = add_history_step_no
         else:
             self._has_history = False
+            self._score_param = score_param
 
     def __getitem__(self, index):
         if not self._has_history:
-            return self._eps_context[index], self._Y[index], self._Y_hat[index], self._alpha[index], self._step_no[index]
+            return self._eps_context[index], self._Y[index], self._Y_hat[index], self._alpha[index], self._step_no[index], \
+                self._ts_id[index], self._score_param[index]
         else:
             return self._eps_context[index], self._Y[index], self._Y_hat[index], self._alpha[index], self._step_no[index],\
                    self._ts_id[index], self._real_history_size[index],\
@@ -123,7 +128,7 @@ class CalibTrainerMixin:
     def __init__(self, batch_mode, with_loss_weight, coverage_loss_weight, chung_loss_weight=0,
                  batch_size=None, batch_mix_count=None, all_alpha_in_one_batch=False,
                  split_in_subsequence_of_size=None, subsequence_stride=1,
-                 loss_mode=LOSS_MODE_RES) -> None:
+                 loss_mode=LOSS_MODE_RES, pub_training=False) -> None:
         self._batch_mode = batch_mode
         self._batch_mix_count = batch_mix_count
         self._width_loss_weight = with_loss_weight
@@ -134,6 +139,7 @@ class CalibTrainerMixin:
         self._sub_sequence = split_in_subsequence_of_size
         self._sub_sequence_stride = subsequence_stride
         self._loss_mode = loss_mode
+        self._pub_training = pub_training
         self._validate()
 
     def _validate(self):
@@ -153,6 +159,7 @@ class CalibTrainerMixin:
             assert self._batch_mix_count is not None
         else:
             assert self._batch_mix_count is None
+            assert not self._pub_training
 
     def _no_train_alpha_needed(self):
         return self._loss_mode in [LOSS_MODE_MIX, LOSS_MODE_MSE, LOSS_MODE_EPS_CDF]
@@ -166,30 +173,42 @@ class CalibTrainerMixin:
                                    PIWidth(coverage_values=alphas))
 
         if self._batch_mode == BATCH_MODE_ONE_TS:
-            data_loader = lambda: self.get_data_loader(calib_data=calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step,
-                                                       alphas=alphas)
+            data_loader = lambda num_worker: self.get_data_loader(calib_data=calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step,
+                                                       alphas=alphas, num_worker=num_worker)
             map_to_model = lambda batch_data:\
                 dict(ctx_data=batch_data[0], Y=batch_data[1], Y_hat=batch_data[2], alpha=batch_data[3],
-                     step_no=batch_data[4])
+                     step_no=batch_data[4], score_param=batch_data[6])
             move_batch_to_device = lambda batch_data, device:\
-                (batch_data[0].to(device), batch_data[1].to(device),batch_data[2].to(device), batch_data[3].to(device),
-                 batch_data[4].to(device))
+                (batch_data[0].to(device), batch_data[1].to(device), batch_data[2].to(device), batch_data[3].to(device),
+                 batch_data[4].to(device), batch_data[5].to(device), batch_data[6].to(device))
             map_to_loss_in = lambda model_out, batch_data: dict(Y=batch_data[1], base_alphas=batch_data[3], **model_out)
             map_to_metrics_in = (lambda model_out, batch_data: dict(Y=batch_data[1], alpha=batch_data[3], **model_out))\
                 if not self._no_train_alpha_needed() else\
                 (lambda model_out, batch_data: dict(Y=batch_data[1],  **model_out))
         else:
-            data_loader = lambda:\
+            data_loader = lambda num_worker:\
                 self.get_data_loader_naive_mix(calib_data=calib_data, Y_hat=Y_hat, fc_state_step=fc_state_step,
-                                               alphas=alphas, history_size=history_size)
-            map_to_model = lambda batch_data:\
-                dict(ctx_data=batch_data[0], Y=batch_data[1], Y_hat=batch_data[2], alpha=batch_data[3],
-                     step_no=batch_data[4], ts_id=batch_data[5], real_hist_size=batch_data[6], ctx_hist=batch_data[7],
-                     step_hist=batch_data[8])
-            move_batch_to_device = lambda batch_data, device: \
-                (batch_data[0].to(device), batch_data[1].to(device), batch_data[2].to(device), batch_data[3].to(device),
-                 batch_data[4].to(device), batch_data[5].to(device), batch_data[6].to(device), batch_data[7].to(device),
-                 batch_data[8].to(device))
+                                               alphas=alphas, history_size=history_size, num_worker=num_worker)
+            if history_size is not None and history_size > 0:
+                assert score.mode is None
+                map_to_model = lambda batch_data:\
+                    dict(ctx_data=batch_data[0], Y=batch_data[1], Y_hat=batch_data[2], alpha=batch_data[3],
+                         step_no=batch_data[4], ts_id=batch_data[5], real_hist_size=batch_data[6], ctx_hist=batch_data[7],
+                         step_hist=batch_data[8])
+                move_batch_to_device = lambda batch_data, device: \
+                    (batch_data[0].to(device), batch_data[1].to(device), batch_data[2].to(device), batch_data[3].to(device),
+                     batch_data[4].to(device), batch_data[5].to(device), batch_data[6].to(device), batch_data[7].to(device),
+                     batch_data[8].to(device))
+            else:
+                map_to_model = lambda batch_data:\
+                    dict(ctx_data=batch_data[0], Y=batch_data[1], Y_hat=batch_data[2], alpha=batch_data[3],
+                         step_no=batch_data[4], ts_id=batch_data[5], score_param=batch_data[6])
+                move_batch_to_device = lambda batch_data, device: \
+                    (batch_data[0].to(device), batch_data[1].to(device), batch_data[2].to(device),
+                     batch_data[3].to(device), batch_data[4].to(device), batch_data[5].to(device),
+                     batch_data[6].to(device))
+
+
             map_to_loss_in = lambda model_out, batch_data: dict(**model_out)
             map_to_metrics_in = lambda model_out, batch_data: dict(**model_out)
 
@@ -217,7 +236,7 @@ class CalibTrainerMixin:
         pass
 
     def get_data_loader(self, calib_data: [PICalibData], Y_hat: List, fc_state_step: List,
-                        alphas: List[float]):
+                        alphas: List[float], num_worker=0):
         splits = [], []
         for idx, c_data in enumerate(calib_data):
             # Prepare Context
@@ -253,18 +272,25 @@ class CalibTrainerMixin:
 
             # Generate Samples
             no_of_samples = tuple([s.shape[0] for s in ctx_data_split])
+            score_param = self._get_score_param(c_data)
             pack_tuple = lambda split_idx, _idx, alpha_t:\
-                (ctx_data_split[split_idx][_idx], Y_split[split_idx][_idx], Y_hat_split[split_idx][_idx],
-                 alpha_t, step_no_split[split_idx][_idx])
+                (ctx_data_split[split_idx][_idx],
+                 Y_split[split_idx][_idx],
+                 Y_hat_split[split_idx][_idx],
+                 alpha_t,
+                 step_no_split[split_idx][_idx],
+                 torch.tensor([ts_id_enc], dtype=torch.int),
+                 score_param)
             self._pack_data_in_splits(splits, pack_tuple, no_of_samples, alphas)
 
-        return DataLoader(EpsSelTrainerDataset(*zip(*splits[0])), batch_size=self._batch_size, shuffle=True,
-                          collate_fn=PadCollate()), \
-               DataLoader(EpsSelTrainerDataset(*zip(*splits[1])), batch_size=self._batch_size, shuffle=True,
-                          collate_fn=PadCollate())
+        return DataLoader(EpsSelTrainerDataset(*zip(*splits[0]), has_history=False),
+                          batch_size=self._batch_size, shuffle=True, collate_fn=PadCollate(), num_workers=num_worker), \
+               DataLoader(EpsSelTrainerDataset(*zip(*splits[1]), has_history=False),
+                          batch_size=self._batch_size, shuffle=True,
+                          collate_fn=PadCollate(), num_workers=num_worker)
 
     def get_data_loader_naive_mix(self, calib_data: [PICalibData], Y_hat: List, fc_state_step: List,
-                                  alphas: List[float], history_size):
+                                  alphas: List[float], history_size, num_worker=0):
         splits = [], []
 
         for idx, c_data in enumerate(calib_data):
@@ -295,19 +321,35 @@ class CalibTrainerMixin:
 
             # Generate Samples
             no_of_samples = tuple([s.shape[0] for s in ctx_data_split])
+            score_param = self._get_score_param(c_data)
+
             pack_tuple = lambda split_idx, _b_idx, alpha_t:\
-                (ctx_data_split[split_idx][_b_idx][-1:], Y_split[split_idx][_b_idx][-1:], Y_hat_split[split_idx][_b_idx][-1:],
-                 alpha_t, step_no_split[split_idx][_b_idx][-1:],
-                 torch.tensor([ts_id_enc], dtype=torch.int), torch.tensor([_b_idx], dtype=torch.int),
-                 ctx_data_split[split_idx][_b_idx][:-1], step_no_split[split_idx][_b_idx][:-1])
+                (ctx_data_split[split_idx][_b_idx][-1:],
+                 Y_split[split_idx][_b_idx][-1:], Y_hat_split[split_idx][_b_idx][-1:],
+                 alpha_t,
+                 step_no_split[split_idx][_b_idx][-1:],
+                 torch.tensor([ts_id_enc], dtype=torch.int),
+                 score_param,
+                 torch.tensor([_b_idx], dtype=torch.int),
+                 ctx_data_split[split_idx][_b_idx][:-1],
+                 step_no_split[split_idx][_b_idx][:-1])
             self._pack_data_in_splits(splits, pack_tuple, no_of_samples, alphas)
 
-        train_data = EpsSelTrainerDataset(*zip(*splits[0]))
-        val_data = EpsSelTrainerDataset(*zip(*splits[1]))
+        train_data = EpsSelTrainerDataset(*zip(*splits[0]), has_history=history_size is not None and history_size > 0)
+        val_data = EpsSelTrainerDataset(*zip(*splits[1]), has_history=history_size is not None and history_size > 0)
         train_sampler = SubGroupMixSampler(train_data._ts_id, mix_count=self._batch_mix_count, batch_size=self._batch_size)
         val_sampler = SubGroupMixSampler(val_data._ts_id, mix_count=self._batch_mix_count, batch_size=self._batch_size)
-        return DataLoader(train_data, batch_sampler=train_sampler), \
-               DataLoader(val_data, batch_sampler=val_sampler)
+        return DataLoader(train_data, batch_sampler=train_sampler, num_workers=num_worker), \
+               DataLoader(val_data, batch_sampler=val_sampler, num_workers=num_worker)
+
+    def _get_score_param(self, calib_data: PICalibData):
+        score_param = calib_data.score_param
+        assert len(score_param) <= 1  # For know only 1 score param is allowed
+        tmp = next(iter(score_param.values()), None)
+        if tmp is None:
+            return False
+        else:
+            return torch.tensor([tmp], dtype=torch.float)
 
     def _pack_data_in_splits(self, splits, pack_func, no_of_samples, alphas):
         for split_idx, split_part in enumerate(splits):
@@ -330,16 +372,22 @@ class CalibTrainerMixin:
 
 
 class EpsCtxMemoryMixin:
-    def __init__(self, mem_size: int, keep_calib_eps: bool, store_step_no=False, mix_data_count=None) -> None:
+    def __init__(self, mem_size: int, keep_calib_eps: bool, store_step_no=False, mix_data_count=None,
+                 memory_in_ram=False, pub_inference=False) -> None:
         self._memory = FiFoMemory(mem_size, store_step_no=store_step_no)
         self._mem_size = mem_size
         self._keep_calib_eps = keep_calib_eps
         self._store_step_no = store_step_no
         self._current_device = torch.device('cpu')
         self._mix_data_count = int(mix_data_count) if mix_data_count is not None else 0
+        self._memory_in_ram = memory_in_ram
+        self._pub_inference = pub_inference
         if self._mix_data_count > 0:
             self._mix_mem_dict = dict()
             self._mix_data_memory = [FiFoMemory(mem_size, store_step_no=store_step_no) for _ in range(self._mix_data_count)]
+        else:
+            self._mix_data_memory = []
+            assert not self._pub_inference
 
     @property
     def max_mem_size(self):
@@ -348,14 +396,17 @@ class EpsCtxMemoryMixin:
     def _fill_memory(self, calib_data: PICalibData, calib_artifacts: PICalibArtifacts,
                      mix_calib_data: List[PICalibData] = None, mix_calib_artifacts: List[PICalibArtifacts] = None):
         self._memory.clear()
-        ctx_encoded, eps, step_no, history_state = self._encode_calib_data(
-            c_data=calib_data, Y_hat=calib_artifacts.fc_Y_hat,
-            fc_state_step=calib_artifacts.fc_state_step, calib_artifacts=calib_artifacts)
-        eps = eps.to(self._current_device)
-        if self._keep_calib_eps:
-            self._memory.add_freezed(ctx_encoded, eps, step_no=step_no)
+        if not self._pub_inference:
+            ctx_encoded, eps, step_no, history_state = self._encode_calib_data(
+                c_data=calib_data, Y_hat=calib_artifacts.fc_Y_hat,
+                fc_state_step=calib_artifacts.fc_state_step, calib_artifacts=calib_artifacts)
+            eps = eps.to(self._current_device)
+            if self._keep_calib_eps:
+                self._memory.add_freezed(ctx_encoded, eps, step_no=step_no)
+            else:
+                self._memory.add_transient(ctx_encoded, eps, step_no=step_no)
         else:
-            self._memory.add_transient(ctx_encoded, eps, step_no=step_no)
+            history_state = None
 
         if self._mix_data_count > 0:
             assert mix_calib_data is not None and mix_calib_artifacts is not None
@@ -368,7 +419,7 @@ class EpsCtxMemoryMixin:
                 self._mix_mem_dict[c_data.ts_id] = len(self._mix_mem_dict)
                 ctx_encoded, eps, step_no, h_state = self._encode_calib_data(
                     c_data=c_data, Y_hat=mix_calib_artifacts[idx].fc_Y_hat,
-                    fc_state_step=calib_artifacts.fc_state_step, calib_artifacts=mix_calib_artifacts[idx])
+                    fc_state_step=mix_calib_artifacts[idx].fc_state_step, calib_artifacts=mix_calib_artifacts[idx])
                 extra_ctx_history_states.append(h_state)
                 eps = eps.to(self._current_device)
                 if self._keep_calib_eps:
@@ -401,36 +452,52 @@ class EpsCtxMemoryMixin:
                                                                  fc_state_step=fc_state_step)  # [calib_size, ctx_size]
         ctx_encoded, ctx_history_state = self._encode_ctx(context=ctx_data.to(self._current_device),
                                                           step_no=step_no)  # [calib_size, ctx_emb_size]
-        eps = calc_residuals(Y=c_data.Y_calib, Y_hat=Y_hat)  # [calib_size, *]
+        eps = score.get(Y=c_data.Y_calib, Y_hat=Y_hat, **c_data.score_param)  # [calib_size, *]
         calib_artifacts.eps = eps
         return ctx_encoded, eps, step_no, ctx_history_state
 
     def _add_step_to_mem(self, ctx, eps, step):
-        self._memory.add_transient(ctx.to(self._current_device), eps.to(self._current_device), step.to(self._current_device))
+        if not self._pub_inference:
+            self._memory.add_transient(ctx.to(self._current_device), eps.to(self._current_device), step.to(self._current_device))
 
-    def _get_data_with_mix_mem_ctx(self, selected_mix_ts=None, selected_subsets=None):
+    def _get_data_with_mix_mem_ctx(self, selected_mix_ts=None, selected_subsets=None, selected_mem_samples=None):
+        base_mem = [self._memory.ctx] if not self._pub_inference else []
         if selected_mix_ts is None:
-            return torch.cat([self._memory.ctx] + [m.ctx for m in self._mix_data_memory], dim=0)
+            m = torch.cat(base_mem + [m.ctx for m in self._mix_data_memory], dim=0)
         elif selected_subsets is not None:
-            return torch.cat([self._memory.ctx] + [m.ctx[selected_subsets[idx], :] for idx, m in enumerate(self._mix_data_memory)], dim=0)
+            m = torch.cat(base_mem + [m.ctx[selected_subsets[idx], :] for idx, m in enumerate(self._mix_data_memory)], dim=0)
         else:
-            return torch.cat([self._memory.ctx] + [m.ctx for m in self._get_mix_mem_sel(selected_mix_ts)], dim=0)
+            m = torch.cat(base_mem + [m.ctx for m in self._get_mix_mem_sel(selected_mix_ts)], dim=0)
+        if selected_mem_samples is not None:
+            return m[selected_mem_samples]
+        else:
+            return m
 
-    def _get_data_with_mix_mem_eps(self, selected_mix_ts=None, selected_subsets=None):
+    def _get_data_with_mix_mem_eps(self, selected_mix_ts=None, selected_subsets=None, selected_mem_samples=None):
+        base_mem = [self._memory.eps] if not self._pub_inference else []
         if selected_mix_ts is None:
-            return torch.cat([self._memory.eps] + [m.eps for m in self._mix_data_memory], dim=0)
+            m = torch.cat(base_mem + [m.eps for m in self._mix_data_memory], dim=0)
         elif selected_subsets is not None:
-            return torch.cat([self._memory.eps] + [m.eps[selected_subsets[idx], :] for idx, m in enumerate(self._mix_data_memory)], dim=0)
+            m = torch.cat(base_mem + [m.eps[selected_subsets[idx], :] for idx, m in enumerate(self._mix_data_memory)], dim=0)
         else:
-            return torch.cat([self._memory.eps] + [m.eps for m in self._get_mix_mem_sel(selected_mix_ts)], dim=0)
+            m = torch.cat(base_mem + [m.eps for m in self._get_mix_mem_sel(selected_mix_ts)], dim=0)
+        if selected_mem_samples is not None:
+            return m[selected_mem_samples]
+        else:
+            return m
 
-    def _get_data_with_mix_mem_step(self, selected_mix_ts=None, selected_subsets=None):
+    def _get_data_with_mix_mem_step(self, selected_mix_ts=None, selected_subsets=None, selected_mem_samples=None):
+        base_mem = [self._memory.step_no] if not self._pub_inference else []
         if selected_mix_ts is None:
-            return torch.cat([self._memory.step_no] + [m.step_no for m in self._mix_data_memory], dim=0)
+            m = torch.cat(base_mem + [m.step_no for m in self._mix_data_memory], dim=0)
         elif selected_subsets is not None:
-            return torch.cat([self._memory.step_no] + [m.step_no[selected_subsets[idx], :] for idx, m in enumerate(self._mix_data_memory)], dim=0)
+            m = torch.cat(base_mem + [m.step_no[selected_subsets[idx], :] for idx, m in enumerate(self._mix_data_memory)], dim=0)
         else:
-            return torch.cat([self._memory.step_no] + [m.step_no for m in self._get_mix_mem_sel(selected_mix_ts)], dim=0)
+            m = torch.cat(base_mem + [m.step_no for m in self._get_mix_mem_sel(selected_mix_ts)], dim=0)
+        if selected_mem_samples is not None:
+            return m[selected_mem_samples]
+        else:
+            return m
 
     def _get_mix_mem_sel(self, ts_ids: List):
         return [self._get_mix_mem(_id) for _id in ts_ids]
@@ -446,6 +513,8 @@ class EpsCtxMemoryMixin:
         return self._mix_mem_dict[ts_id]
 
     def to_device(self, device):
+        if self._memory_in_ram:
+            device = torch.device('cpu')
         self._memory.to(device=device)
         if self._mix_data_count > 0:
             for m in self._mix_data_memory:
@@ -548,8 +617,8 @@ def get_loss_func(width_loss_weight, coverage_loss_weight, chung_weight, loss_mo
             Y = Y[:, -eval_len:, :]     # In case interval prediction has offset at begging
             Y = Y.reshape(-1, 1)
         Y = Y.repeat(no_alphas, 1)      # Repeat for each alpha
-        eps = torch.abs(Y - Y_hat)
-        eps_pred = torch.abs(q_high - Y_hat)
+        eps = torch.abs(calc_residuals(Y_hat, Y))
+        eps_pred = torch.abs(calc_residuals(Y_hat, q_high))
         loss_mask = kwargs.get('loss_mask', None)
         loss_high = pinball_loss(eps_pred, eps, high_alpha, mask=loss_mask).sum()
         if width_loss_weight > 0:

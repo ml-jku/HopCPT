@@ -42,6 +42,7 @@ class BaseTrainer(ABC):
         self._model: BaseModel = None
         self._optimizer: optim.Optimizer = None
         self._lr_scheduler: lr_scheduler._LRScheduler = None
+        self._grad_clip_param = None
         self._loss: nn.Module = None
         self._train_metrics: MetricCollection = None
         self._val_metrics: MetricCollection = None

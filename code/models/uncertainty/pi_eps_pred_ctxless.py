@@ -10,7 +10,8 @@ from models.forcast.forcast_base import PredictionOutputType, FCPredictionData
 from models.uncertainty.components.eps_ctx_encode import FcModel
 from models.uncertainty.ml_base import CalibTrainerMixin, BATCH_MODE_ONE_TS
 from models.uncertainty.pi_base import PIModel, PIPredictionStepData, PIModelPrediction, PICalibData, PICalibArtifacts
-from utils.calc_torch import calc_residuals, unfold_window
+from models.uncertainty.score_service import score
+from utils.calc_torch import unfold_window
 
 
 class EpsPredCtxLess(BaseModel, PIModel, CalibTrainerMixin):
@@ -34,7 +35,7 @@ class EpsPredCtxLess(BaseModel, PIModel, CalibTrainerMixin):
                                  X_step=c_data.X_calib, step_offset=c_data.step_offset))
             Y_hat.append(c_result.point)
             fc_state_step.append(c_result.state)
-            eps = calc_residuals(Y=c_data.Y_calib, Y_hat=Y_hat[-1])  # [calib_size, *]
+            eps = score.get(Y=c_data.Y_calib, Y_hat=Y_hat[-1])  # [calib_size, *]
             calib_artifacts.append(PICalibArtifacts(fc_Y_hat=Y_hat[-1], eps=eps, fc_state_step=fc_state_step[-1]))
 
         trainer_config = kwargs['trainer_config']
@@ -59,12 +60,12 @@ class EpsPredCtxLess(BaseModel, PIModel, CalibTrainerMixin):
                              step_offset=pred_data.step_offset_overall)).point
         eps_q_low, eps_q_high, _ = self._forward(past_eps=torch.tensor(self._eps_buffer[-self._past_window:]).unsqueeze(-1).T,
                                                  Y_hat=Y_hat, alpha=alpha)
-        pred_int = Y_hat + eps_q_low, Y_hat + eps_q_high
+        pred_int = Y_hat + score.resolve(eps_q_low), Y_hat + score.resolve(eps_q_high)
         prediction_result = PIModelPrediction(pred_interval=pred_int, fc_Y_hat=Y_hat)
         return prediction_result
 
     def _post_predict_step(self, Y_step, pred_result: PIModelPrediction, pred_data: PIPredictionStepData, **kwargs):
-        step_eps = list(calc_residuals(Y_hat=pred_result.fc_Y_hat, Y=Y_step))
+        step_eps = list(score.get(Y_hat=pred_result.fc_Y_hat, Y=Y_step))
         self._eps_buffer.extend(step_eps)
 
     @property
@@ -83,11 +84,11 @@ class EpsPredCtxLess(BaseModel, PIModel, CalibTrainerMixin):
 
     def forward(self, *args, **kwargs):
         Y, Y_hat, alpha, mask = kwargs['Y'].detach(), kwargs['Y_hat'].detach(), kwargs['alpha'], kwargs['mask'].detach()
-        eps = calc_residuals(Y=Y, Y_hat=Y_hat).detach()  # [batch_size, *]
+        eps = score.get(Y=Y, Y_hat=Y_hat).detach()  # [batch_size, *]
         past_eps = unfold_window(eps, window_len=self._past_window).squeeze(-1)
         eps_q_low, eps_q_high, beta = self._forward(past_eps=past_eps, Y_hat=Y_hat, alpha=alpha)
-        q_low = Y_hat + eps_q_low.unsqueeze(1)
-        q_high = Y_hat + eps_q_high.unsqueeze(1)
+        q_low = Y_hat + score.resolve(eps_q_low.unsqueeze(1))
+        q_high = Y_hat + score.resolve(eps_q_high.unsqueeze(1))
         return dict(q_low=q_low, q_high=q_high, low_alpha=beta, high_alpha=(beta - alpha + 1))
 
     @abstractmethod

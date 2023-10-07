@@ -14,8 +14,7 @@ class NexCP(PIModel):
     Ported from NexCP (Barber et al. 2022)
     """
     def __init__(self, **kwargs):
-        PIModel.__init__(self, use_dedicated_calibration=True, fc_prediction_out_modes=(PredictionOutputType.POINT,),
-                         ts_ids=kwargs["ts_ids"])
+        PIModel.__init__(self, use_dedicated_calibration=True, fc_prediction_out_modes=(PredictionOutputType.POINT,))
         self.mode = kwargs['mode']
         assert self.mode in ['CP-LS', "nexCP-LS", "nexCP-WSL"]
         self._rho = kwargs['rho']

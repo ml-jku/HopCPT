@@ -24,6 +24,9 @@ run_config:
     - 20
     - 30
     - 40
+#  skip_cfg: # fp_cfg / seed
+#    - [0, 10]
+#    - [2, 20]
   init_models: null
 
 sweep:
@@ -38,7 +41,7 @@ sweep:
 defaults:
   - config: default
   - override config/model_fc: darts_forest
-  - override config/model_uc: conf_default
+  - override config/model_uc: eps_pred_hopfield
   - override config/dataset: enbPI_solar_all
   - override config/task: default_gn #default
 
@@ -47,15 +50,15 @@ config:
 
   ### EXPERIMENT CONFIG
   experiment_data:
-    project_name: null
-    project_entity: null
-    base_proj_dir: null
+    project_name: null  # set wandb project name
+    project_entity: null #null, null
+    base_proj_dir: null    # USE ABSOLUTE PATH!
     data_dir: ${config.experiment_data.base_proj_dir}data
     model_dir: ${config.experiment_data.base_proj_dir}models_save
     evaluate: true
-    offline: disabled
-    experiment_tag: tag
-    experiment_name: name
+    offline: false
+    experiment_tag: local
+    experiment_name: test_lstm_pred
     experiment_notes:
     experiment_dir: null
     experiment_sweep_fp: null      # This is used by sweep to allow grouping of multiple seeds
@@ -66,16 +69,22 @@ config:
   trainer:
     _target_: trainer.internal_trainer.ModelInternalTrainer
     trainer_config:
-      n_epochs: 500
+      n_epochs: 250
       val_every: 5
       save_every: 10000
       early_stopping_patience: 10000
       optim:
         _target_: torch.optim.AdamW
         _partial_: true
-        lr: 0.1
+        lr: 0.001
         weight_decay: 0.001
       lr_scheduler:
+        _target_: trainer.WarmupCosineSchedule
+        _partial_: true
+        warmup_steps: 20
+        t_total: 1000
+      grad_clip_param: null
+      #  max_norm: 1
       model_selection: threshold-pi
       init_model: null
   ###

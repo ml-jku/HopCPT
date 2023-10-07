@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List
+from typing import List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -16,11 +16,14 @@ class EpsilonContextGen:
 
     def __init__(self, mode, ts_ids: List[str] = None):
         """
-        5 * 2 * 2 different context modes
+        Base Context Modes:
         - uni
         - uni_past_multi_step
+        - multi_step
         - multi
         - fc_state
+        - uni_past_multi_step_fc_states
+        - multi_step_fc_states
         - none
         each of the 3 with optionally
         + eps (postfix: "_and_eps"
@@ -53,8 +56,14 @@ class EpsilonContextGen:
             calc = self._ctx_uni_past_multi_current
         elif mode == 'multi':
             calc = self._ctx_multivariant
+        elif mode == 'multi_step':
+            calc = self._ctx_multi_current
         elif mode == 'fc_states':
             calc = self._ctx_fc_state
+        elif mode == 'uni_past_multi_step_fc_states':
+            calc = self._ctx_uni_past_multi_current_fc_states
+        elif mode == 'multi_step_fc_states':
+            calc = self._ctx_multi_current_fc_states
         elif mode == 'none':
             assert self._use_eps or self._use_y_hat or self._use_ts_onehot
             calc = self._ctx_none
@@ -119,9 +128,9 @@ class EpsilonContextGen:
 
     def calib_data_to_ctx(self, calib_data: PICalibData, Y_hat, past_window, use_pre_calib_eps_for_calib, fc_state_step=None,
                           Y_hat_pre_calib=None):
-        eps = calc_residuals(Y=calib_data.Y_calib, Y_hat=Y_hat)
         # 1) Unfold calib data and create past windows for each timestep
         if (self.use_eps_past and not use_pre_calib_eps_for_calib) or calib_data.Y_calib is None:
+            eps = calc_residuals(Y=calib_data.Y_calib, Y_hat=Y_hat)
             # We need to cut of the first window_len from calib
             eps_past_windowed = unfold_window(M=eps[:-1], window_len=past_window)
             X_past_windowed = unfold_window(M=calib_data.X_calib[:-1], window_len=past_window)
@@ -133,6 +142,7 @@ class EpsilonContextGen:
         else:
             window_offset = 0
             if self.use_eps_past:
+                eps = calc_residuals(Y=calib_data.Y_calib, Y_hat=Y_hat)
                 assert Y_hat_pre_calib is not None
                 eps_pre_calib = calc_residuals(Y=calib_data.Y_pre_calib, Y_hat=Y_hat_pre_calib)
                 eps_past_windowed = unfold_window(M=eps[:-1], M_past=eps_pre_calib, window_len=past_window)
@@ -157,6 +167,11 @@ class EpsilonContextGen:
     def use_eps_past(self):
         return self._use_eps
 
+    @property
+    def use_past(self):
+        return self._short_mode in ['uni', 'uni_past_multi_step', 'multi', 'uni_past_multi_step_fc_states']\
+            or self.use_eps_past
+
     def context_size(self, no_of_x_features, past_window_len, y_features=1, fc_state_dim=None):
         if self._short_mode == 'uni':
             ctx_len = past_window_len * y_features
@@ -164,9 +179,17 @@ class EpsilonContextGen:
             ctx_len = past_window_len * y_features + no_of_x_features
         elif self._short_mode == 'multi':
             ctx_len = (past_window_len * (y_features + no_of_x_features)) + no_of_x_features
+        elif self._short_mode == 'multi_step':
+            ctx_len = no_of_x_features
         elif self._short_mode == 'fc_states':
             assert fc_state_dim is not None
             ctx_len = fc_state_dim
+        elif self._short_mode == 'uni_past_multi_step_fc_states':
+            assert fc_state_dim is not None
+            ctx_len = fc_state_dim + past_window_len * y_features + no_of_x_features
+        elif self._short_mode == 'multi_step_fc_states':
+            assert fc_state_dim is not None
+            ctx_len = fc_state_dim + no_of_x_features
         elif self._short_mode == 'none':
             ctx_len = 0
         else:
@@ -193,8 +216,21 @@ class EpsilonContextGen:
         return torch.cat((Y_past.view(Y_past.shape[0], -1), X_step.view(X_step.shape[0], -1)), dim=1)
 
     @staticmethod
+    def _ctx_multi_current(X_step, **kwargs):
+        return X_step.view(X_step.shape[0], -1)
+
+    @staticmethod
     def _ctx_fc_state(fc_state_step, **kwargs):
         return fc_state_step.reshape(fc_state_step.shape[0], -1)
+
+    @staticmethod
+    def _ctx_uni_past_multi_current_fc_states(Y_past, X_step, fc_state_step, **kwargs):
+        return torch.cat((Y_past.view(Y_past.shape[0], -1), X_step.view(X_step.shape[0], -1),
+                          fc_state_step.reshape(fc_state_step.shape[0], -1)), dim=1)
+
+    @staticmethod
+    def _ctx_multi_current_fc_states(X_step, fc_state_step, **kwargs):
+        return torch.cat((X_step.view(X_step.shape[0], -1), fc_state_step.reshape(fc_state_step.shape[0], -1)), dim=1)
 
     @staticmethod
     def _ctx_none(**kwargs):
@@ -237,5 +273,8 @@ class EpsilonContextGen:
         past_sd = torch.std(past, dim=1).to(device=tmp.device)
         return torch.cat((past_sd.view(past_sd.shape[0], 1), tmp), dim=1)
 
-    def get_ts_id_enc(self, ts_id: str) -> int:
-        return self._ts_ids.index(ts_id)
+    def get_ts_id_enc(self, ts_id: str) -> Optional[int]:
+        try:
+            return self._ts_ids.index(ts_id)
+        except ValueError:
+            return None

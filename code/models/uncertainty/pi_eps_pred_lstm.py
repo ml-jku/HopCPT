@@ -10,7 +10,7 @@ from models.uncertainty.components.eps_ctx_encode import FcModel
 from models.uncertainty.components.eps_ctx_gen import EpsilonContextGen
 from models.uncertainty.ml_base import CalibTrainerMixin, EpsCtxMemoryMixin, BATCH_MODE_ONE_TS
 from models.uncertainty.pi_base import PIModel, PIPredictionStepData, PIModelPrediction, PICalibData, PICalibArtifacts
-from utils.calc_torch import calc_residuals, unfold_window
+from models.uncertainty.score_service import score
 
 
 class EpsPredictionLSTM(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryMixin):
@@ -131,7 +131,7 @@ class EpsPredictionLSTM(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryMixin
             current_ctx=ctx_encoded, alpha=alpha, lstm_state=(lstm_hn, lstm_cn))
         self._lstm_state = (lstm_hn, lstm_cn)
 
-        pred_int = Y_hat + eps_q_low, Y_hat + eps_q_high
+        pred_int = Y_hat + score.resolve(eps_q_low, **pred_data.score_param), Y_hat + score.resolve(eps_q_high, **pred_data.score_param)
         prediction_result = PIModelPrediction(pred_interval=pred_int, fc_Y_hat=Y_hat)
         prediction_result.eps_ctx = ctx_encoded
         return prediction_result
@@ -139,7 +139,7 @@ class EpsPredictionLSTM(BaseModel, PIModel, CalibTrainerMixin, EpsCtxMemoryMixin
     def _post_predict_step(self, Y_step, pred_result: PIModelPrediction, pred_data: PIPredictionStepData, **kwargs):
         # Update memory
         encoded_eps_ctx = pred_result.eps_ctx
-        eps = calc_residuals(Y=Y_step, Y_hat=pred_result.fc_Y_hat)
+        eps = score.get(Y=Y_step, Y_hat=pred_result.fc_Y_hat)
         self._memory.add_transient(encoded_eps_ctx, eps)
 
     def model_ready(self):

@@ -1,10 +1,10 @@
 # NeuralHydrology configuration to train an LSTM on the hydrology dataset.
 
 # experiment name, used as folder name
-experiment_name: regression_camels
+experiment_name: regression_camels_9y_seed10_1601_092104
 
 # place to store run directory (if empty runs are stored in code_dir/runs/)
-run_dir: ./outputs/neuralhydrology/
+run_dir: ./models_save/hydro/
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
 train_basin_file: ./data/hydrology/531_basin_list.txt

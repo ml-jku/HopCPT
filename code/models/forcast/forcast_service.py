@@ -174,6 +174,10 @@ class ForcastService:
                                     ts_id=dataset.ts_id,
                                     y_normalize_props=dataset.Y_normalize_props)
                     self._set_model(None, None, model)
+                elif type(model).__name__ == "PrecomputedNeuralHydrologyForcastPUB":
+                    LOGGER.info(f"Train Forcast model ({idx+1}/{self._n_estimator}) for all TS and alphas: {alphas}.")
+                    model.train_global(datasets, alphas, self._trainer_config, self._experiment_config)
+                    self._set_model(None, None, model)
                 elif type(model).__name__ == "GlobalLSTM":
                     LOGGER.info(f"Train Forcast model ({idx+1}/{self._n_estimator}) for all TS and alphas: {alphas}.")
                     model.train_global(datasets, alphas, self._trainer_config, self._experiment_config)

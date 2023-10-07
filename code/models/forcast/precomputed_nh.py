@@ -40,6 +40,7 @@ class PrecomputedNeuralHydrologyForcast(ForcastModel):
         self._state_dim = None
         self._loaded_basin_state = None
         self._current_loaded_basin_state_id = None
+        self._allow_shorter_prediction_period = kwargs['model_params'].get('allow_shorter_prediction_period', False)
 
     def _train(self, X, Y, precalc_fc_steps=None, *args, **kwargs) -> Optional[Tuple[FCModelPrediction, Optional[int]]]:
         basin = kwargs['ts_id'].split('_')[0]
@@ -91,8 +92,9 @@ class PrecomputedNeuralHydrologyForcast(ForcastModel):
     def _check_pred_data(self, pred_data: FCPredictionData):
         # We don't actually use these since everything is precomputed, but in theory (if we'd re-run the model), we
         # would need this information.
-        assert pred_data.X_step is not None
-        assert pred_data.X_past is not None
+        # assert pred_data.X_step is not None
+        # assert pred_data.X_past is not None
+        pass
 
     def can_handle_different_alpha(self):
         return True
@@ -115,7 +117,10 @@ class PrecomputedNeuralHydrologyForcast(ForcastModel):
             file = self._get_basin_state_file(basin)
             with file.open('rb') as f:
                 self._loaded_basin_state = self._slice_states(pickle.load(f), 0, sys.maxsize)
-            assert self._precomputed_predictions[basin].shape[0] == self._loaded_basin_state.shape[0]
+            if self._allow_shorter_prediction_period:
+                assert self._precomputed_predictions[basin].shape[0] <= self._loaded_basin_state.shape[0]
+            else:
+                assert self._precomputed_predictions[basin].shape[0] == self._loaded_basin_state.shape[0]
             self._current_loaded_basin_state_id = basin
             LOGGER.info(f'Loaded NeuralHydrology Model states from {file}.')
         else:
@@ -129,7 +134,10 @@ class PrecomputedNeuralHydrologyForcast(ForcastModel):
         precomputed_basin = basin_predictions['1D']['xr'][self._target_variable].sel(time_step=0)
         Y_hat = precomputed_basin.isel(date=slice(slice_start, slice_end)).to_numpy()
         assert np.isnan(Y_hat).sum() == 0
-        assert len(Y_hat) == len(precomputed_basin)  # Check to make sure we didn't mess up train/val splits.
+        if self._allow_shorter_prediction_period:
+            assert len(Y_hat) <= len(precomputed_basin)  # Just for debuging in case only a subset of test is evaluated
+        else:
+            assert len(Y_hat) == len(precomputed_basin)  # Check to make sure we didn't mess up train/val splits.
         return Y_hat
 
     def _slice_states(self, basin_states, slice_start: int, slice_end: int):

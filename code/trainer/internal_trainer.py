@@ -54,8 +54,9 @@ class ModelInternalTrainer(BaseTrainer):
         wandb.define_metric(f"{_VAL_EP_PREFIX}*", step_metric="epoch", summary='none')
 
     def _create_dataloaders(self):
-        LOGGER.info('Init Dataloader.')
-        train_loader, val_loader = self._get_data_loader()
+        num_worker = self._trainer_config.num_worker if hasattr(self._trainer_config, 'num_worker') else 0
+        LOGGER.info(f'Init Dataloader with {num_worker}.')
+        train_loader, val_loader = self._get_data_loader(num_worker)
         self._loaders = dict(train=train_loader, val=val_loader)
 
     def _create_model(self) -> BaseModel:
@@ -65,7 +66,12 @@ class ModelInternalTrainer(BaseTrainer):
         LOGGER.info('Create optimizer and scheduler.')
         self._optimizer = self._trainer_config.optim(params=model.parameters())
         if self._trainer_config.lr_scheduler:
+            LOGGER.info("LR Scheduler is used!")
             self._lr_scheduler = self._trainer_config.lr_scheduler(optimizer=self._optimizer)
+        self._grad_clip_param = self._trainer_config.grad_clip_param
+        if self._grad_clip_param is not None:
+            LOGGER.info("Gradient Clipping is used!")
+
 
     def _train_epoch(self, epoch: int) -> None:
         # setup logging
@@ -88,6 +94,8 @@ class ModelInternalTrainer(BaseTrainer):
             # backward pass
             self._optimizer.zero_grad()
             loss_total.backward()
+            if self._grad_clip_param is not None:
+                torch.nn.utils.clip_grad_norm_(parameters=self._model.parameters(), **self._grad_clip_param)
             self._optimizer.step()
             self._train_step += 1
 

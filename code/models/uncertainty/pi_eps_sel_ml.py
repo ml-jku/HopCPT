@@ -6,7 +6,7 @@ from torch import nn
 from torchmetrics.functional import pairwise_cosine_similarity
 
 from models.uncertainty.ml_base import CalibTrainerMixin, EpsCtxMemoryMixin, BATCH_MODE_ONE_TS
-from utils.calc_torch import calc_residuals
+from models.uncertainty.score_service import score
 from models.base_model import BaseModel
 from models.forcast.forcast_base import PredictionOutputType, FCPredictionData
 from models.uncertainty.components.eps_ctx_encode import FcModel
@@ -68,7 +68,7 @@ class EpsSelectionPIML(BaseModel, EpsSelectionPIBase, CalibTrainerMixin, EpsCtxM
     def _post_predict_step(self, Y_step, pred_result: PIModelPrediction, pred_data: PIPredictionStepData, **kwargs):
         # Update memory
         encoded_eps_ctx = pred_result.eps_ctx
-        eps = calc_residuals(Y=Y_step, Y_hat=pred_result.fc_Y_hat)
+        eps = score.get(Y=Y_step, Y_hat=pred_result.fc_Y_hat, **pred_data.score_param)
         self._memory.add_transient(encoded_eps_ctx, eps)
 
     def _retrieve_epsilon(self, current_ctx) -> torch.tensor:
@@ -122,7 +122,7 @@ class EpsSelectionPIML(BaseModel, EpsSelectionPIBase, CalibTrainerMixin, EpsCtxM
         torch.autograd.set_detect_anomaly(True)
         ctx, Y, Y_hat, alpha, step_no = kwargs['ctx_data'].detach(), kwargs['Y'].detach(), kwargs['Y_hat'].detach(),\
                                      kwargs['alpha'], kwargs['step_no'].detach()
-        eps = calc_residuals(Y=Y, Y_hat=Y_hat).detach()  # [batch_size, *]
+        eps = score.get(Y=Y, Y_hat=Y_hat).detach()  # [batch_size, *]
 
         batch_encoded = self._encode_ctx(context=ctx, step_no=step_no)[0]    # [batch_size, ctx_emb_size]
         #relevant_idx = self._sel_reference_ctx_idx(
@@ -135,8 +135,8 @@ class EpsSelectionPIML(BaseModel, EpsSelectionPIBase, CalibTrainerMixin, EpsCtxM
         eps_selected = self._retrieve_with_cos_sim_share_(cos_sim, eps)
         eps_q_low, eps_q_high, beta = self._calc_conformal_quantiles(
             eps_selected, alpha, no_beta_bins=self._no_beta_bins if self._train_with_beta else 0)
-        q_low = Y_hat + eps_q_low.T
-        q_high = Y_hat + eps_q_high.T
+        q_low = Y_hat + score.resolve(eps_q_low.T)
+        q_high = Y_hat + score.resolve(eps_q_high.T)
         return dict(q_low=q_low, q_high=q_high, low_alpha=beta, high_alpha=(1 - alpha + beta))
 
     def _retrieve_with_cos_sim_share_(self, cos_sim, eps):

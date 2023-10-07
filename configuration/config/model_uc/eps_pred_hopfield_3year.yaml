@@ -13,18 +13,20 @@ pos_encode:
   mode: null
   dim: 5
 # Memory
+online_memory: true
+online_mem_delay: null
 keep_calib_eps: false
 eps_mem_size: 8000
 # Model
 hopfield_beta: 1
 head_per_alpha: False
 eps_to_stored_pattern: False
+score_transform: null # norm_by_ts_sd
 # Train
 batch_size: 4
 batch_mode: one_ts
 batch_mix_count: null    # Only possible if not one_ts batch mode is used
-mix_data_inference_mode: null # Only possible if not one_ts batch mode is used
-mix_data_inference_count: 3 # Only used if mix inference used and not mix_all
+pub_training: False
 use_memory_window: False
 train_only_past: False
 limit_train_seq_to_mem_size: False
@@ -32,7 +34,14 @@ limit_train_seq_stride: 10 # Only relevant if limit_train_seq_to_mem_size is Tru
 predict_abs_eps: True
 train_alphas: null        # Only possible for Per Head and in Conf Mode with residuals or absolute Loss
 sample_alpha_train: null  # Only possible for NOT per Head with absolute or residual loss mode
+# Inference Mix
+mix_data_inference_mode: null # Only possible if not one_ts batch mode is used
+mix_data_inference_count: 3 # Only used if mix inference used and not mix_all
+mix_inference_draws: 1
+mix_inference_sample_mem_size: null
+pub_inference: False
 # Inference Conformal
+cached_inference: False
 conf_selection: True
 conf_eps_abs: False
 conf_sel_beta: 0

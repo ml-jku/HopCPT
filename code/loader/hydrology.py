@@ -24,18 +24,24 @@ def get_hydro_data(dataset_type, path, **kwargs):
     use_static_attributes = kwargs['use_static_attributes']
 
     train_start_date = fc_hydro_cfg.train_start_date
-    test_start_date = fc_hydro_cfg.test_start_date
+    if not kwargs.get("calib_as_calib", False):
+        eval_start_date = fc_hydro_cfg.test_start_date
+    else:
+        eval_start_date = fc_hydro_cfg.validation_start_date
     test_end_date = fc_hydro_cfg.test_end_date
-    assert train_start_date < test_start_date
+    assert train_start_date < eval_start_date
 
     if use_static_attributes:
         attribute_list = fc_hydro_cfg.static_attributes
         basin_attributes = load_camels_us_attributes(camels_path, basin_list)[attribute_list]
         # Normalize static attributes here, since they need to be handled differently than dynamic variables.
-        attribute_means = basin_attributes.mean(axis=0)
-        attribute_stds = basin_attributes.std(axis=0)
+        given_norm_param = kwargs.get('hydro_static_norm_param', None)
+        if given_norm_param is None:
+            given_norm_param = basin_attributes.mean(axis=0), basin_attributes.std(axis=0)
+        attribute_means, attribute_stds = given_norm_param
         basin_attributes = (basin_attributes - attribute_means) / attribute_stds
     else:
+        given_norm_param = None
         basin_attributes = None
 
     datasets = []
@@ -86,13 +92,17 @@ def get_hydro_data(dataset_type, path, **kwargs):
             discharge_nans = basin_df[TARGET_COL_NAME].isna().sum()
             if basin_df.iloc[discharge_nans:].isna().sum().sum() == 0:
                 basin_df = basin_df.iloc[discharge_nans:]
-                if basin_df.index[0] < test_start_date:
+                if basin_df.index[0] < eval_start_date:
                     failed = False
             if failed:
                 raise ValueError(f'Basin {basin} has NaN values.')
 
 
-        train_steps = (basin_df.index < test_start_date).sum()
+        train_steps = (basin_df.index < eval_start_date).sum()
+        if eval_start_date != fc_hydro_cfg.test_start_date:
+            calib_steps = (basin_df.index < fc_hydro_cfg.test_start_date).sum() - train_steps
+        else:
+            calib_steps = None
 
         Y_full = basin_df[TARGET_COL_NAME]
         X_full = basin_df[df_columns]
@@ -101,5 +111,6 @@ def get_hydro_data(dataset_type, path, **kwargs):
             torch.from_numpy(Y_full.to_numpy()).float(),
             _id,
             train_steps,
+            calib_steps
         ))
-    return datasets, static_attribute_indices
+    return datasets, static_attribute_indices, given_norm_param

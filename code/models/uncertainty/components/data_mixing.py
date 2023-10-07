@@ -1,11 +1,12 @@
 import random
-from dataclasses import dataclass
-from typing import Iterator, List, Optional
+from dataclasses import dataclass, field
+from typing import Iterator, List, Optional, Dict
 
 import torch
 from torch.utils.data import Sampler
 
 from loader.dataset import TsDataset
+from models.uncertainty.score_service import get_score_param
 
 
 class SubGroupMixSampler(Sampler[int]):
@@ -54,6 +55,7 @@ class MixTsData:
     X_step: Optional[torch.Tensor]
     Y_step: Optional[torch.Tensor]
     eps_past: Optional[torch.Tensor]
+    score_param: Dict = field(default_factory=dict)
 
 
 INFERENCE_MIX_MODE_ALL = "mix_all"
@@ -64,33 +66,46 @@ INFERENCE_MIX_TAKE_ALL_SUBSET = "mix_all_subsets"
 
 class MixDataService:
 
-    def __init__(self, inference_mix_mode, mix_inference_count, ts_ids) -> None:
+    def __init__(self, inference_mix_mode, mix_inference_count, mix_inference_draws, mix_inference_sample_mem_size,
+                 ts_ids, pub_inference) -> None:
         super().__init__()
         assert inference_mix_mode in [None, INFERENCE_MIX_MODE_ALL, INFERENCE_MIX_TAKE_MIX_COUNT_RAND_FIXED,
                                       INFERENCE_MIX_TAKE_MIX_COUNT_RAND_CHOOSE]
         self._mode = inference_mix_mode
         self._ts_ids = list(set(ts_ids))
         self._mix_inference_count = mix_inference_count
+        self._mix_inference_draws = mix_inference_draws
+        self._mix_inference_sample_mem_size = mix_inference_sample_mem_size
+        self._pub_inference = pub_inference
         if inference_mix_mode is not None:
             assert mix_inference_count is not None
             assert ts_ids is not None
             assert len(self._ts_ids) >= self._mix_inference_count
+        if mix_inference_draws != 1:
+            assert self._mode in [INFERENCE_MIX_TAKE_MIX_COUNT_RAND_CHOOSE, INFERENCE_MIX_MODE_ALL]
 
     @property
     def mode(self):
         return self._mode
 
-    def pack_mix_inference_data(self, mix_datasets: List[TsDataset], start_past, overall_step) -> Optional[List[MixTsData]]:
+    @property
+    def _count_diff_const(self):
+        return 0 if self._pub_inference else 1
+
+    def pack_mix_inference_data(self, mix_datasets: List[TsDataset], max_past, step_after_start) -> Optional[List[MixTsData]]:
         relevant_data = self.select_mix_inference_data(mix_datasets)
         if len(relevant_data) > 0:
             def map_to_mix_data(data):
+                step = data.test_step + step_after_start
+                past_start = max(0, step - max_past)
                 return MixTsData(
                     ts_id=data.ts_id,
-                    X_past=data.X_full[start_past:overall_step],
-                    X_step=data.X_full[overall_step].unsqueeze(0),
-                    Y_past=data.Y_full[start_past:overall_step],
-                    Y_step=data.Y_full[overall_step].unsqueeze(0),
-                    eps_past=None  # ToDo
+                    X_past=data.X_full[past_start:step],
+                    X_step=data.X_full[step].unsqueeze(0),
+                    Y_past=data.Y_full[past_start:step],
+                    Y_step=data.Y_full[step].unsqueeze(0),
+                    eps_past=None,  # ToDo
+                    score_param=get_score_param(data)
                 )
             return [map_to_mix_data(d) for d in relevant_data]
         else:
@@ -101,9 +116,9 @@ class MixDataService:
             return None
         if self._mode in [INFERENCE_MIX_MODE_ALL, INFERENCE_MIX_TAKE_MIX_COUNT_RAND_CHOOSE,
                           INFERENCE_MIX_TAKE_ALL_SUBSET]:
-            return len(self._ts_ids) - 1
+            return len(self._ts_ids) - self._count_diff_const
         else:  # INFERENCE_MIX_TAKE_MIX_COUNT_RAND_FIXED:
-            return self._mix_inference_count - 1
+            return self._mix_inference_count - self._count_diff_const
 
     def select_mix_inference_data(self, mix_dataset: List[TsDataset]):
         if self._mode is None:
@@ -112,7 +127,7 @@ class MixDataService:
                           INFERENCE_MIX_TAKE_ALL_SUBSET]:
             return mix_dataset
         else:  # INFERENCE_MIX_TAKE_MIX_COUNT_RAND_FIXED:
-            return random.sample(mix_dataset, self._mix_inference_count - 1)
+            return random.sample(mix_dataset, self._mix_inference_count - self._count_diff_const)
 
     def select_mix_inference_step_ids(self, inference_ts_id):
         if self._mode is None:
@@ -120,7 +135,7 @@ class MixDataService:
         if self._mode in [INFERENCE_MIX_MODE_ALL, INFERENCE_MIX_TAKE_MIX_COUNT_RAND_FIXED, INFERENCE_MIX_TAKE_ALL_SUBSET]:
             return None  # Select None means to use all (if count fixed mode use all available)
         else:  # INFERENCE_MIX_TAKE_MIX_COUNT_RAND_CHOOSE:
-            return random.sample([_id for _id in self._ts_ids if _id != inference_ts_id], self._mix_inference_count - 1)
+            return random.sample([_id for _id in self._ts_ids if _id != inference_ts_id], self._mix_inference_count - self._count_diff_const)
 
     def select_mix_inference_subsets(self):
         if self._mode is None:
@@ -131,3 +146,19 @@ class MixDataService:
         else:  # INFERENCE_MIX_TAKE_ALL_SUBSET:
             raise NotImplemented("Not Ready yet")
 
+    def mix_inference_draws(self):
+        return self._mix_inference_draws
+
+    def merge_mix_draws(self, quantile_list):
+        return torch.mean(torch.stack(quantile_list), dim=0)
+
+    def select_mix_inference_mem_samples(self, mem_size, mix_mem_size):
+        if self._mode is None or self._mix_inference_sample_mem_size is None:
+            return None
+        elif self._mode in [INFERENCE_MIX_TAKE_ALL_SUBSET]:
+            raise NotImplemented("Not Ready Yet")
+        elif self._mode in [INFERENCE_MIX_TAKE_MIX_COUNT_RAND_FIXED, INFERENCE_MIX_TAKE_MIX_COUNT_RAND_CHOOSE]:
+            m_size = mem_size + ((self._mix_inference_count - self._count_diff_const) * mix_mem_size)
+        else:  # INFERENCE_MIX_MODE_ALL
+            m_size = mem_size + ((len(self._ts_ids) - self._count_diff_const) * mix_mem_size)
+        return torch.randperm(m_size)[:self._mix_inference_sample_mem_size]

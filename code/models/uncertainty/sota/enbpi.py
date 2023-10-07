@@ -17,8 +17,7 @@ class EnbPIModel(PIModel):
     !But without the LOO Bootstraping/Calbiration splitting! (though could be done via correct calib/eval calls)
     """
     def __init__(self, **kwargs):
-        super().__init__(use_dedicated_calibration=False, fc_prediction_out_modes=(PredictionOutputType.POINT,),
-                         ts_ids=kwargs["ts_ids"])
+        super().__init__(use_dedicated_calibration=False, fc_prediction_out_modes=(PredictionOutputType.POINT,))
         self._adaptive_sigma = kwargs['adaptive_sigma']
         self._past_window_len = kwargs['past_window_len']
         self._beta_calc_bins = kwargs.get('beta_calc_bins', 20)
@@ -93,8 +92,7 @@ class SPICModel(PIModel):
     """
     def __init__(self, **kwargs):
         self._retrain_regressor = kwargs['retrain_regressor']
-        super().__init__(use_dedicated_calibration=True,
-                         fc_prediction_out_modes=(PredictionOutputType.POINT,), ts_ids=kwargs["ts_ids"])
+        super().__init__(use_dedicated_calibration=True, fc_prediction_out_modes=(PredictionOutputType.POINT,))
         self._past_window_len = kwargs['past_window_len']
         self._adaptive_sigma = kwargs['adaptive_sigma']
         self._use_xt_for_regressor = kwargs['use_xt']

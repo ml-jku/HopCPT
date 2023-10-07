@@ -1,6 +1,6 @@
 import sys
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Tuple, Optional, Union, List, Dict
 
 import numpy as np
@@ -32,6 +32,7 @@ class PIPredictionStepData:
     eps_past: Optional[Union[torch.Tensor, np.ndarray]]     # [past_len, 1*]
     alpha: Optional[float] = None
     mix_ts: Optional[List[MixTsData]] = None
+    score_param: Dict = field(default_factory=dict)
 
 
 @dataclass
@@ -43,7 +44,7 @@ class PICalibData:
     Y_calib: torch.Tensor
     X_pre_calib: Optional[torch.Tensor] = None  # X Before the calib steps (typically X_train)
     Y_pre_calib: Optional[torch.Tensor] = None  # Y Before the calib steps (typically X_train)
-
+    score_param: Dict = field(default_factory=dict)
 
 @dataclass
 class PICalibArtifacts:
@@ -56,12 +57,8 @@ class PICalibArtifacts:
 
 
 class PIModel(ABC):
-    def __init__(self, use_dedicated_calibration: bool, fc_prediction_out_modes: Tuple[PredictionOutputType],
-                 mix_data_inference_mode=None, mix_inference_count=None, ts_ids=None):
-        assert use_dedicated_calibration or mix_data_inference_mode is None
+    def __init__(self, use_dedicated_calibration: bool, fc_prediction_out_modes: Tuple[PredictionOutputType]):
         self._use_dedicated_calibration = use_dedicated_calibration
-        self._mix_data_service = MixDataService(mix_data_inference_mode, mix_inference_count=mix_inference_count,
-                                                ts_ids=ts_ids)
         self._fc_prediction_out_modes = fc_prediction_out_modes
         self._forcast_service: Optional[ForcastService] = None
 
@@ -97,9 +94,8 @@ class PIModel(ABC):
         return self._use_dedicated_calibration
 
     @property
-    def mix_data_service(self) -> MixDataService:
-        """Utilize other ts data mixed in at calib"""
-        return self._mix_data_service
+    def has_mix_service(self) -> bool:
+        return False
 
     def required_past_len(self) -> Tuple[int, int]:
         """Tuple: min_required_length, max_used_length"""

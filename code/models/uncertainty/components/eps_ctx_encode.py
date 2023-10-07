@@ -313,6 +313,10 @@ class ContextEncodeModule(nn.Module):
                (sum([compress.additional_dim for compress in self._history_compression])
                 if self._history_compression is not None else 0)
 
+    @property
+    def has_history_comp(self):
+        return self._history_compression is not None
+
     def forward(self, context, step_no, context_past, context_past_state,
                 past_pre_encoded=False, past_has_history=False, past_real_len=None):
         """

@@ -24,6 +24,8 @@ run_config:
     - 20
     - 30
     - 40
+    - 50
+    - 60
 sweep:
   type: grid
   axes:
@@ -45,20 +47,20 @@ config:
 
   ### EXPERIMENT CONFIG
   experiment_data:
-    project_name: null
-    project_entity: null
-    base_proj_dir: null
+    project_name: null  # set wandb project name
+    project_entity: null #null, null
+    base_proj_dir: null    # USE ABSOLUTE PATH!
     data_dir: ${config.experiment_data.base_proj_dir}data
     model_dir: ${config.experiment_data.base_proj_dir}models_save
     evaluate: false
     offline: disabled
-    experiment_tag: tag
-    experiment_name: name
+    experiment_tag: DEBUG
+    experiment_name: test_offline
     experiment_notes:
     experiment_dir: null
     experiment_sweep_fp: null      # This is used by sweep to allow grouping of multiple seeds
     experiment_sweep_tag: NoSweep  # This is used by sweep to allow filter for the sweep
-    seed: 10
+    seed: 55
     gpu_id: -1
 
   trainer:
@@ -74,6 +76,5 @@ config:
         lr: 0.01
         weight_decay: 0.01
       lr_scheduler:
-      model_selection: threshold-pi
       init_model: null # NOT USED
   ###

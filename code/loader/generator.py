@@ -29,7 +29,8 @@ def get_ts_id(dataset_type, data_path):
 class DataGenerator:
 
     @staticmethod
-    def get_data(data_config: TSDataConfig, task_config: TaskConfig, replace_base_dir) -> [ChronoSplittedTsDataset]:
+    def get_data(data_config: TSDataConfig, task_config: TaskConfig, replace_base_dir,
+                 X_norm_param = None, Y_norm_param = None, hydro_static_norm_param=None) -> [ChronoSplittedTsDataset]:
         datasets = []
         if data_config.dataset_type.startswith(TOY_DATA_PREFIX):
             assert len(data_config.paths) == 1
@@ -62,16 +63,21 @@ class DataGenerator:
             p = Path(path)
             # Returns a list of (X, Y, id, number of the FC model's train samples) Tuples and indices of the
             # static attributes.
-            table_combos, attribute_indices = get_hydro_data(data_config.dataset_type, p, **data_config.add_config)
-            for X_full, Y_full, ts_id, train_steps in table_combos:
+            table_combos, attribute_indices, attribute_norm_params =\
+                get_hydro_data(data_config.dataset_type, p, hydro_static_norm_param=hydro_static_norm_param,
+                               **data_config.add_config)
+            for X_full, Y_full, ts_id, train_steps, calib_steps in table_combos:
                 # Add the number of training steps to the task config so the dataset generator can do its split
                 # consistent with the train/test split in the pretrained neuralhydrology model.
                 task_config.add_config = (dict(task_config.add_config) if task_config.add_config else {}) \
                     | {'train_steps': int(train_steps)}
+                if calib_steps is not None:
+                    task_config.add_config = dict(task_config.add_config) | {'calib_steps': int(calib_steps)}
                 # Pass the static attribute indices to the hydro dataset so it knows which variables should be ignored
                 # during normalization.
                 dataset_init = \
-                    lambda **kwargs: HydroDataset(**(kwargs | {'static_attribute_indices': attribute_indices}))
+                    lambda **kwargs: HydroDataset(**(kwargs | {'static_attribute_indices': attribute_indices,
+                                                               'static_attribute_norm_param': attribute_norm_params}))
                 datasets.append(DataGenerator._table_to_dataset(X_full, Y_full, ts_id, task_config, dataset_init))
         else:
             for path in data_config.paths:
@@ -83,7 +89,7 @@ class DataGenerator:
                 else:
                     datasets.append(DataGenerator._get_data_single(data_config.dataset_type, path, task_config))
         if hasattr(task_config, "global_norm") and task_config.global_norm:
-            DataGenerator._global_normalize(datasets)
+            DataGenerator._global_normalize(datasets, X_norm_param=X_norm_param, Y_norm_param=Y_norm_param)
         return datasets
 
     @staticmethod
@@ -99,15 +105,21 @@ class DataGenerator:
         return DataGenerator._table_to_dataset(X_full, Y_full, get_ts_id(dataset_type, data_path), task_config)
 
     @staticmethod
-    def _global_normalize(datasets):
-        X_train_calib_all = torch.concat(([d.X_train for d in datasets] + [d.X_calib for d in datasets]))
-        X_mean = torch.mean(X_train_calib_all, dim=0)
-        X_std = torch.std(X_train_calib_all, dim=0)
-        del X_train_calib_all
-        Y_train_calib_all = torch.concat(([d.Y_train for d in datasets] + [d.Y_calib for d in datasets]))
-        Y_mean = torch.mean(Y_train_calib_all, dim=0)
-        Y_std = torch.std(Y_train_calib_all, dim=0)
-        del Y_train_calib_all
+    def _global_normalize(datasets, X_norm_param = None, Y_norm_param = None):
+        if X_norm_param is None:
+            X_train_calib_all = torch.concat(([d.X_train for d in datasets] + [d.X_calib for d in datasets]))
+            X_mean = torch.mean(X_train_calib_all, dim=0)
+            X_std = torch.std(X_train_calib_all, dim=0)
+            del X_train_calib_all
+        else:
+            X_mean, X_std = X_norm_param
+        if Y_norm_param is None:
+            Y_train_calib_all = torch.concat(([d.Y_train for d in datasets] + [d.Y_calib for d in datasets]))
+            Y_mean = torch.mean(Y_train_calib_all, dim=0)
+            Y_std = torch.std(Y_train_calib_all, dim=0)
+            del Y_train_calib_all
+        else:
+            Y_mean, Y_std = Y_norm_param
         for data in datasets:
             data.global_normalize(X_mean=X_mean, X_std=X_std, Y_mean=Y_mean, Y_std=Y_std)
 
@@ -116,7 +128,12 @@ class DataGenerator:
         # If the absolute number of train_steps is known, ignore the split config and do a 50/50 split for cal/test.
         if task_config.add_config is not None and task_config.add_config.get('train_steps'):
             train_steps = task_config.add_config['train_steps']
-            cal_steps = (X_full.shape[0] - train_steps) // 2
+            if task_config.add_config.get("no_calib", False):
+                cal_steps = 0
+            elif 'calib_steps' in task_config.add_config:
+                cal_steps = task_config.add_config['calib_steps']
+            else:
+                cal_steps = (X_full.shape[0] - train_steps) // 2
             split_points = np.array([train_steps, train_steps + cal_steps])
         else:
             split_def = DataGenerator._get_needed_splits(task_config)

@@ -2,7 +2,7 @@ _target_: models.forcast.globallstm.GlobalLSTM
 model: global-lstm
 model_params:
   seq_len: 50
-  batch_size: 512
+  batch_size: 256
   dropout: 0
   use_mc_dropout: false
   train_with_calib: false

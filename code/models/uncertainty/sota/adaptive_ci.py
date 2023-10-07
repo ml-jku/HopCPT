@@ -13,8 +13,7 @@ class AdaptiveCI(PIModel):
     Ported from AdaptiveCI (Gibbs, Candes (2021))
     """
     def __init__(self, **kwargs) -> None:
-        PIModel.__init__(self, use_dedicated_calibration=True, fc_prediction_out_modes=(PredictionOutputType.QUANTILE,),
-                         ts_ids=kwargs["ts_ids"])
+        PIModel.__init__(self, use_dedicated_calibration=True, fc_prediction_out_modes=(PredictionOutputType.QUANTILE,))
         self._gamma = kwargs.get('gamma', 0.005)
         self._mode = kwargs['mode']
         assert self._mode in ('simple', 'momentum')

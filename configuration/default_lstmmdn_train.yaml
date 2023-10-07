@@ -22,8 +22,6 @@ run_config:
   seeds:
     - 10
     - 20
-    - 30
-    - 40
 #  skip_cfg: # fp_cfg / seed
 #    - [0, 10]
 #    - [2, 20]
@@ -37,6 +35,11 @@ sweep:
         - 128
         - 256
         - 64
+    - parameter: model_fc.model_params.dropout
+      vals:
+        - null
+        - 0.1
+        - 0.25
     - parameter: model_fc.model_params.mdn_conf.n_components
       vals:
         - 1

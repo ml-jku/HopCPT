@@ -10,6 +10,7 @@ from models.base_model import BaseModel
 from models.forcast.forcast_base import PredictionOutputType, FCPredictionData
 from models.forcast.forcast_service import ForcastService
 from models.uncertainty.pi_base import PIModel, PIPredictionStepData, PIModelPrediction, PICalibData, PICalibArtifacts
+from models.uncertainty.score_service import get_score_param
 from utils.calc_torch import calc_residuals
 
 LOGGER = logging.getLogger(__name__)
@@ -91,10 +92,14 @@ class UncertaintyService:
             calib_artifact = None
 
         if model.use_dedicated_calibration:
-            selected_mix_data = model.mix_data_service.select_mix_inference_data(other_datasets)
-            if len(selected_mix_data) > 0:
-                mix_calib_data = [self._map_to_calib_data(d) for d in selected_mix_data]
-                mix_calib_artifact = [self.get_calib_artifact(d, alpha) for d in selected_mix_data]
+            if model.has_mix_service:
+                selected_mix_data = model._mix_data_service.select_mix_inference_data(other_datasets)
+                if len(selected_mix_data) > 0:
+                    mix_calib_data = [self._map_to_calib_data(d) for d in selected_mix_data]
+                    mix_calib_artifact = [self.get_calib_artifact(d, alpha) for d in selected_mix_data]
+                else:
+                    mix_calib_data = None
+                    mix_calib_artifact = None
             else:
                 mix_calib_data = None
                 mix_calib_artifact = None
@@ -155,8 +160,11 @@ class UncertaintyService:
         alpha = pred_data.alpha
         return self._get_model(ts_id, alpha).predict_step(Y_step=Y_step, pred_data=pred_data, **kwargs)
 
-    def get_mix_data_service(self, ts_id, alpha):
-        return self._get_model(ts_id, alpha).mix_data_service
+    def pack_mix_data(self, ts_id, alpha, **mix_kwargs):
+        if self._get_model(ts_id, alpha).has_mix_service:
+            return self._get_model(ts_id, alpha)._mix_data_service.pack_mix_inference_data(**mix_kwargs)
+        else:
+            return None
 
     def has_calib_artifact(self, dataset, alpha):
         return self._has_access(self._calib_artefacts, dataset.ts_id, alpha, force_per_data=True)
@@ -191,7 +199,7 @@ class UncertaintyService:
         return PICalibData(ts_id=dataset.ts_id, X_calib=dataset.X_calib, Y_calib=dataset.Y_calib,
                            X_pre_calib=dataset.X_train if isinstance(dataset, ChronoSplittedTsDataset) else None,
                            Y_pre_calib=dataset.Y_train if isinstance(dataset, ChronoSplittedTsDataset) else None,
-                           step_offset=dataset.calib_step)
+                           step_offset=dataset.calib_step, score_param=get_score_param(dataset))
 
     def _persistence_fingerprint(self, model_fp, experiment_config, trainer_config):
         model_print = [f'{key}-{item}' for key, item in model_fp.items()]
