@@ -8,12 +8,6 @@ usemathjax: true
 
 <link rel="stylesheet" href="assets/css/accordion.css">
 
-This blog post explains the paper **[Few-Shot Learning by Dimensionality Reduction in Gradient Space](https://arxiv.org/abs/2206.03483)**, which introduces **SubGD**, a novel few-shot learning algorithm (presented at CoLLAs 2022).
-
-SubGD is a few-shot learning method that restricts fine-tuning to a low-dimensional parameter subspace. This reduces model complexity and increases sample efficiency. SubGD identifies the subspace through the most important update directions during fine-tuning on training tasks. 
-
-The interactive plot below illustrates how SubGD exploits important update directions. Due to the restriction to a subspace, SubGD approaches the minimum more directly. 
-
 This blog post explains HopCPT introduced in the paper “[Conformal Prediction for Time Series with Modern Hopfield Networks](https://arxiv.org/abs/2303.12783) which is **accepted at Neurips2023**.
 
 HopCPT is an approach to **generate prediction intervals for multivariate time series, given a point estimate from an arbitrary base prediction model**.
@@ -25,7 +19,7 @@ The learning-based Modern Hopfield architecture, in conjunction with the Conform
 
 HopCPT achieves a new state-of-the-art performance on 7 time series datasets from 4 different domains.
 
-![HopCPT Visualization](/docs/assets/Figure1_Animated_higherRes.gif)
+![HopCPT Visualization](/assets/Figure1_Animated_higherRes.gif)
 <details>
   <summary> <strong>Figure 1: Illustration of HopCPT</strong> </summary>
   HopCPT find the relevant time steps of the past and retrieves its errors with a weighting. Then a weighted CP interval is build.
@@ -51,7 +45,7 @@ Intuitively spoken, HopCPT aims to find  the time steps from the same error dist
 
 For a more formal explanation check out the [paper](https://arxiv.org/abs/2303.12783).
 
-![HopCPT Visualization](/docs/assets/blogpost_toy.png)
+![HopCPT Visualization](/assets/blogpost_toy.png)
 <details>
   <summary> <strong>Figure 2:  HopCPT Vs. Standard CP</strong> </summary>
   HopCPT is able to capture the different error distributions of the time series and adapts the prediction interval accordingly.
