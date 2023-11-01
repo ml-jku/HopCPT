@@ -25,7 +25,7 @@ The learning-based Modern Hopfield architecture, in conjunction with the Conform
 
 HopCPT achieves a new state-of-the-art performance on 7 time series datasets from 4 different domains.
 
-![HopCPT Visualization](/gh-pages/assets/Figure1_Animated_higherRes.gif)
+![HopCPT Visualization](/docs/assets/Figure1_Animated_higherRes.gif)
 <details>
   <summary> <strong>Figure 1: Illustration of HopCPT</strong> </summary>
   HopCPT find the relevant time steps of the past and retrieves its errors with a weighting. Then a weighted CP interval is build.
@@ -51,7 +51,7 @@ Intuitively spoken, HopCPT aims to find  the time steps from the same error dist
 
 For a more formal explanation check out the [paper](https://arxiv.org/abs/2303.12783).
 
-![HopCPT Visualization](/gh-pages/assets/blogpost_toy.png)
+![HopCPT Visualization](/docs/assets/blogpost_toy.png)
 <details>
   <summary> <strong>Figure 2:  HopCPT Vs. Standard CP</strong> </summary>
   HopCPT is able to capture the different error distributions of the time series and adapts the prediction interval accordingly.
