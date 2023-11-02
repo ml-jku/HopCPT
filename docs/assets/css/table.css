@@ -1,0 +1,9 @@
+.main-content { font-size: 1rem }
+td { font-size: 0.75rem }
+th { font-size: 0.75rem }
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}

@@ -6,6 +6,8 @@ date:   2023-11-01 20:00:00 +0200
 usemathjax: True
 ---
 
+<link rel="stylesheet" href="https://github.com/ml-jku/HopCPT/blob/gh-pages/docs/assets/css/table.css">
+
 This blog post explains HopCPT introduced in the paper “[Conformal Prediction for Time Series with Modern Hopfield Networks](https://arxiv.org/abs/2303.12783) which is **accepted at Neurips2023**.
 
 HopCPT is an approach to **generate prediction intervals for multivariate time series, given a point estimate from an arbitrary base prediction model**.
@@ -17,7 +19,12 @@ The learning-based Modern Hopfield architecture, in conjunction with the Conform
 
 HopCPT achieves a new state-of-the-art performance on 7 time series datasets from 4 different domains.
 
-![HopCPT Visualization](/assets/Figure1_Animated_higherRes.gif)
+<p class="center">
+  <img src="https://github.com/ml-jku/HopCPT/blob/gh-pages/docs/assets/Figure1_Animated_higherRes.gif"/>
+</p>
+
+<!--![HopCPT Visualization](/assets/Figure1_Animated_higherRes.gif)-->
+
 <details>
   <summary> <strong>► Figure 1: Illustration of HopCPT</strong> </summary>
   HopCPT find the relevant time steps of the past and retrieves its errors with a weighting. Then a weighted CP interval is build.
