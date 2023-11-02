@@ -19,15 +19,12 @@ The learning-based Modern Hopfield architecture, in conjunction with the Conform
 
 HopCPT achieves a new state-of-the-art performance on 7 time series datasets from 4 different domains.
 
-<p class="center">
-  <img src="/HopCPT/assets/Figure1_Animated_higherRes.gif"/>
+<p>
+  <img src="/HopCPT/assets/Figure1_Animated_higherRes.gif" class="center"/>
 </p>
-
-<!--![HopCPT Visualization](/assets/Figure1_Animated_higherRes.gif)-->
-
 <details>
   <summary> <strong>► Figure 1: Illustration of HopCPT</strong> </summary>
-  HopCPT find the relevant time steps of the past and retrieves its errors with a weighting. Then a weighted CP interval is build.
+  <sub>HopCPT find the relevant time steps of the past and retrieves its errors with a weighting. Then a weighted CP interval is build.</sub>
 </details>
 
 HopCPT is built upon the framework of Conformal Prediction (CP).
@@ -50,11 +47,13 @@ Intuitively spoken, HopCPT aims to find  the time steps from the same error dist
 
 For a more formal explanation check out the [paper](https://arxiv.org/abs/2303.12783).
 
-![HopCPT Visualization](/assets/blogpost_toy.png)
+<p>
+  <img src="/HopCPT/assets/blogpost_toy.png" class="center"/>
+</p>
 <details>
   <summary> <strong>► Figure 2:  HopCPT Vs. Standard CP</strong> </summary>
-  HopCPT is able to capture the different error distributions of the time series and adapts the prediction interval accordingly.
-  Standard CP build only a marginal prediction interval which is very inefficent for the low error part of the time series
+  <sub>HopCPT is able to capture the different error distributions of the time series and adapts the prediction interval accordingly.
+  Standard CP build only a marginal prediction interval which is very inefficent for the low error part of the time series</sub>
 </details>
 
 ### Experimental Results
@@ -114,10 +113,10 @@ Base Predictor: **LSTM**
 |  | Winkler | $\textbf{0.19}^{\pm 0.01}$ | $0.24^{\pm 0.00}$ | $0.28$ | $0.32$ | $0.35$ | $0.36$ |
 
 <details>
-  <summary> <strong>Table Information</strong> </summary>
-  Bold numbers correspond to the  best result for the respective metric in the experiment (PI-Width and Winkler score). The error term represents the standard deviation over  repeated runs with different seeds (results without an error term are from deterministic models) <br><br>
+  <summary> <strong>►Table Information</strong> </summary>
+  <sub>Bold numbers correspond to the  best result for the respective metric in the experiment (PI-Width and Winkler score). The error term represents the standard deviation over  repeated runs with different seeds (results without an error term are from deterministic models) <br><br>
   Check the paper for more detailed explanation about the overall experiment, data sets, compared models, hyperparameter tuning and other details.
-  There you can also find additional evaluations, also to non-CP methods. 
+  There you can also find additional evaluations, also to non-CP methods.</sub>
 </details>
 
 
