@@ -6,7 +6,7 @@ date:   2023-11-01 20:00:00 +0200
 usemathjax: True
 ---
 
-<link rel="stylesheet" href="/assets/css/table.css">
+<link rel="stylesheet" href="/HopCPT/assets/css/table.css">
 
 This blog post explains HopCPT introduced in the paper “[Conformal Prediction for Time Series with Modern Hopfield Networks](https://arxiv.org/abs/2303.12783) which is **accepted at Neurips2023**.
 
@@ -20,7 +20,7 @@ The learning-based Modern Hopfield architecture, in conjunction with the Conform
 HopCPT achieves a new state-of-the-art performance on 7 time series datasets from 4 different domains.
 
 <p class="center">
-  <img src="/assets/Figure1_Animated_higherRes.gif"/>
+  <img src="/HopCPT/assets/Figure1_Animated_higherRes.gif"/>
 </p>
 
 <!--![HopCPT Visualization](/assets/Figure1_Animated_higherRes.gif)-->
