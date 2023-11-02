@@ -3,10 +3,8 @@ layout: default
 title: Conformal Prediction for Time Series with Modern Hopfield Networks
 description: Blog post
 date:   2023-11-01 20:00:00 +0200
-usemathjax: true
+usemathjax: True
 ---
-
-<link rel="stylesheet" href="assets/css/accordion.css">
 
 This blog post explains HopCPT introduced in the paper “[Conformal Prediction for Time Series with Modern Hopfield Networks](https://arxiv.org/abs/2303.12783) which is **accepted at Neurips2023**.
 
@@ -21,7 +19,7 @@ HopCPT achieves a new state-of-the-art performance on 7 time series datasets fro
 
 ![HopCPT Visualization](/assets/Figure1_Animated_higherRes.gif)
 <details>
-  <summary> <strong>Figure 1: Illustration of HopCPT</strong> </summary>
+  <summary> <strong>► Figure 1: Illustration of HopCPT</strong> </summary>
   HopCPT find the relevant time steps of the past and retrieves its errors with a weighting. Then a weighted CP interval is build.
 </details>
 
@@ -47,7 +45,7 @@ For a more formal explanation check out the [paper](https://arxiv.org/abs/2303.1
 
 ![HopCPT Visualization](/assets/blogpost_toy.png)
 <details>
-  <summary> <strong>Figure 2:  HopCPT Vs. Standard CP</strong> </summary>
+  <summary> <strong>► Figure 2:  HopCPT Vs. Standard CP</strong> </summary>
   HopCPT is able to capture the different error distributions of the time series and adapts the prediction interval accordingly.
   Standard CP build only a marginal prediction interval which is very inefficent for the low error part of the time series
 </details>
