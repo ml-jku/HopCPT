@@ -66,6 +66,7 @@ config:
     experiment_sweep_tag: NoSweep  # This is used by sweep to allow filter for the sweep
     seed: 10
     gpu_id: 4
+    offline: true
 
   trainer:
     _target_: trainer.internal_trainer.ModelInternalTrainer
@@ -74,6 +75,7 @@ config:
       val_every: 5
       save_every: 10000
       early_stopping_patience: 10000
+      grad_clip_param: null
       optim:
         _target_: torch.optim.AdamW
         _partial_: true
