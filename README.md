@@ -11,9 +11,7 @@ Andreas Auer<sup>**1**</sup>, Martin Gauch<sup>**1,2**</sup>, Daniel Klotz<sup>*
 This repository contains the source code for **"Conformal Prediction for Time Series with Modern Hopfield Networks"** accepted at the at Neurips 2023.
 The paper is available [here](https://arxiv.org/abs/2303.12783). 
 
----
-
-##### Blogpost comming soon - stay tuned!
+Also check out our [**Blogpost** here](https://ml-jku.github.io/HopCPT/)!
 
 ---
 
